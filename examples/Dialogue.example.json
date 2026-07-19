@@ -1,0 +1,114 @@
+{
+    "ID": 1,
+    "NPCIDs": [],
+    "RootNodeID": 1,
+    "GreetingVoiceLineIDs": [
+        "Trader_Greeting_1",
+        "Trader_Greeting_2"
+    ],
+    "FarewellVoiceLineIDs": [
+        "Trader_Farewell_1"
+    ],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "You're new. Say what you need and I'll tell you if I can help.",
+            "VoiceLineIDs": [
+                "Trader_Node1_1"
+            ],
+            "Responses": [
+                {
+                    "Text": "I'm looking for work.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "SHOW_QUEST_LIST"
+                },
+                {
+                    "Text": "What is this place?",
+                    "NextNodeID": 2,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Anything I should know?",
+                    "NextNodeID": 3,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Any news from the outpost?",
+                    "NextNodeID": 4,
+                    "RequiredQuestID": 42,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Nothing right now.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "A place people stop at. Some of them stay.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll get going.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 3,
+            "Type": "STANDARD",
+            "SpeakerText": "Keep your distance from anyone who won't show their hands. That's most of it.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll get going.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 4,
+            "Type": "STANDARD",
+            "SpeakerText": "The outpost is holding. That's more than I'd have said a month ago.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll get going.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        }
+    ]
+}

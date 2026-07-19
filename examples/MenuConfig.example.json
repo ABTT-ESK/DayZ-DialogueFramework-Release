@@ -1,0 +1,60 @@
+{
+    "ConfigVersion": 1,
+    "Position": "BOTTOM_CENTER",
+    "PanelWidth": 0.6,
+    "PanelHeight": 0.42,
+    "OffsetX": 0.0,
+    "OffsetY": 0.0,
+    "EdgeMargin": 0.03,
+    "BackgroundColor": [
+        230,
+        0,
+        0,
+        0
+    ],
+    "ResponseBackgroundColor": [
+        200,
+        0,
+        0,
+        0
+    ],
+    "HoverBorderColor": [
+        255,
+        255,
+        215,
+        0
+    ],
+    "SpeakerNameColor": [
+        255,
+        255,
+        255,
+        255
+    ],
+    "SpeakerTextColor": [
+        255,
+        255,
+        255,
+        255
+    ],
+    "ResponseTextColor": [
+        255,
+        220,
+        220,
+        220
+    ],
+    "RewardSelectedColor": [
+        230,
+        90,
+        70,
+        20
+    ],
+    "WindowBorderColor": [
+        255,
+        255,
+        255,
+        255
+    ],
+    "WindowBorderThickness": 2,
+    "VisitedResponseOpacity": 0.4,
+    "LayoutOverride": ""
+}

@@ -1,0 +1,24 @@
+# Build artifacts
+*.pbo
+*.pbo.bak
+release/
+build/
+
+# Signing keys — NEVER commit private keys
+Keys/*.bikey
+Keys/*.biprivatekey
+!Keys/.gitkeep
+
+# Editor / OS cruft
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.suo
+*.user
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+*.rpt

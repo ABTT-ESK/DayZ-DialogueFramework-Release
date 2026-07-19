@@ -1,0 +1,104 @@
+{
+    "ID": 900,
+    "NPCIDs": [],
+    "TraderIDs": [
+        "Weapons"
+    ],
+    "TraderClassNames": [
+        "ExpansionTraderAIDenis"
+    ],
+    "TraderPositions": [
+        "1234.50 300.00 5678.90"
+    ],
+    "TraderPositionRadius": 3.0,
+    "RootNodeID": 1,
+    "GreetingVoiceLineIDs": [],
+    "FarewellVoiceLineIDs": [],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "Cash or trade, I don't much care which. Just don't handle the merchandise before you've paid for it.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Let's see what you've got.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Where does your stock come from?",
+                    "NextNodeID": 2,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Heard anything worth knowing?",
+                    "NextNodeID": 3,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Nothing right now.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "Scavengers, mostly. I don't ask where a thing's been and they don't tell me. Keeps the arrangement working.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Let's see what you've got.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll leave you to it.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 3,
+            "Type": "STANDARD",
+            "SpeakerText": "Prices went up on anything that fires. Draw your own conclusions about why.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Let's see what you've got.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll leave you to it.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        }
+    ],
+    "TraderMinKeyMatches": 2
+}

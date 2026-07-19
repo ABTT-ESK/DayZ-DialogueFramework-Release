@@ -1,0 +1,66 @@
+{
+    "Quests": [
+        {
+            "QuestID": 1,
+            "AcceptTexts": [
+                "I'll take care of it.",
+                "Consider it done."
+            ],
+            "DeclineTexts": [
+                "Not interested.",
+                "Find someone else."
+            ],
+            "TurnInTexts": [
+                "It's finished.",
+                "All of it, as asked."
+            ],
+            "NotYetTexts": [
+                "Not yet."
+            ],
+            "InProgressTexts": [
+                "Still working on it.",
+                "Give me time."
+            ],
+            "RewardSelectText": "Fair work deserves fair pay. Take one."
+        },
+        {
+            "QuestID": 2,
+            "AcceptTexts": [
+                "I'll gather what you need."
+            ],
+            "DeclineTexts": [
+                "That's a lot of hauling."
+            ],
+            "TurnInTexts": [
+                "Everything you asked for."
+            ],
+            "NotYetTexts": [
+                "Still short."
+            ],
+            "InProgressTexts": [
+                "Still collecting."
+            ],
+            "RewardSelectText": "Pick something off the bench."
+        },
+        {
+            "QuestID": 3,
+            "AcceptTexts": [
+                "I'll deal with them.",
+                "Point me at them."
+            ],
+            "DeclineTexts": [
+                "That's not my kind of work."
+            ],
+            "TurnInTexts": [
+                "Handled. They won't be back."
+            ],
+            "NotYetTexts": [
+                "Not finished."
+            ],
+            "InProgressTexts": [
+                "Still out there."
+            ],
+            "RewardSelectText": "You earned a choice. Take one."
+        }
+    ]
+}
