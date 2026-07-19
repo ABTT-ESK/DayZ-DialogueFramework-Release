@@ -28,7 +28,7 @@ Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https:
 ## Requirements
 
 - [DayZ Expansion](https://github.com/salutesh/DayZ-Expansion-Scripts)
-  (Core + Quests)
+  (Core + Quests + Market)
 - Community Framework (CF)
 
 ## Installation
