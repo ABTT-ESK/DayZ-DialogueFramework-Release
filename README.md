@@ -126,6 +126,25 @@ quest system. The NPC talking animation technique is credited to
 which was used as a reference for the underlying engine calls — this mod
 implements it independently and does not require it.
 
+## Repacking
+
+**Repacking into a server mod pack is allowed.** 
+
+Please:
+
+- Keep the `LICENSE` file in your repack
+- Credit Dialogue Framework in your server or mod pack description
+- Don't present it as your own work
+
+One thing to be aware of rather than a rule: **support covers the official
+Workshop version only.** A repack is a frozen copy — when a fix ships,
+subscribers get it automatically and your repack doesn't. If you hit a bug,
+reproduce it on the current official version before reporting it, otherwise
+there's a good chance it's already fixed.
+
+The same applies to the voice pack template, which is meant to be
+republished under your own name.
+
 ## Licensing
 
 **This mod is MIT licensed** — see [`LICENSE`](LICENSE). Every line in this
