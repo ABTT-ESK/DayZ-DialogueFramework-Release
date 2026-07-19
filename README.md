@@ -21,7 +21,7 @@ folder.** No scripting, and no repacking for anything except voice audio.
 - Live quest list per NPC, always reflecting real quest state
 - Reward picker with item previews for quests that let players choose
 - Window position, size and colours configurable per server
-- Optional voice lines with matching NPC talking animation
+- Optional voice lines, with a talking animation on AI NPCs
 
 Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https://github.com/ABTT-ESK/DayZ-DialogueFramework-Release)
 

@@ -62,6 +62,14 @@ sharing a definition, an entity class *and* a position are
 indistinguishable. In practice they differ on at least one, which is why two
 agreeing keys is the recommended setting.
 
+**The talking animation only works on AI NPCs.** Expansion's regular NPCs
+and traders are deliberately inert — their `CommandHandler` runs no
+animation command and keeps the body physics-inactive — so there's nothing
+to drive a mouth movement from. Dialogue, quests, trading and voice lines
+all work normally on them; the NPC simply doesn't move while a line plays.
+Use the AI variants (`ExpansionQuestNPCAI*`, `ExpansionTraderAI*`) if you
+want the animation.
+
 **Config changes need a full client restart.** Trees and menu settings are
 sent to players when they connect, so a reconnect won't pick up changes —
 the client process has to restart.
