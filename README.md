@@ -28,7 +28,7 @@ Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https:
 ## Requirements
 
 - [DayZ Expansion](https://github.com/salutesh/DayZ-Expansion-Scripts)
-  (Core + Quests + Market)
+  (Core + Quests)
 - Community Framework (CF)
 
 ## Installation
@@ -128,7 +128,9 @@ implements it independently and does not require it.
 
 ## Repacking
 
-**Repacking into a server mod pack is allowed.** 
+**Repacking into a server mod pack is allowed.** DayZ servers routinely run
+dozens of mods and there are real limits on load time and client-side mod
+count, so consolidating is normal practice rather than an edge case.
 
 Please:
 

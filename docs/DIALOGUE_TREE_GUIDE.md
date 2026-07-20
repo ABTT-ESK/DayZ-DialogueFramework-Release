@@ -155,7 +155,9 @@ trader definition name:
 $profile:\DialogFramework\Dialogues\Trader_Weapons\Dialogue.json
 ```
 
-The conversation opens **instead of** the market menu. A response with
+The conversation opens **before** the market menu rather than replacing it —
+Expansion's shop is untouched, it just waits until the player asks for it. A
+response with
 `"ActionType": "OPEN_TRADER"` closes the dialogue and opens the normal
 market. Put that on more than one node so players are never more than one
 click from trading.

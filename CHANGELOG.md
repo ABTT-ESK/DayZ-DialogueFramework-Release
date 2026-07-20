@@ -10,9 +10,10 @@ middle number changes when features are added, the last when only fixes are.
 ## [1.0.0] — Initial release
 
 RPG-style branching dialogue for DayZ servers running DayZ Expansion.
-Replaces the stock quest and trader menus with proper conversation: NPCs
-greet you, you choose what to say, conversations branch, and quests are
-offered, accepted and handed in through dialogue instead of a list.
+Replaces the stock quest menu with proper conversation, and puts a
+conversation in front of traders before the shop opens: NPCs greet you, you
+choose what to say, conversations branch, and quests are offered, accepted
+and handed in through dialogue instead of a list.
 
 Everything is configured with plain JSON in the server profile folder. No
 scripting, and no repacking for anything except voice audio.

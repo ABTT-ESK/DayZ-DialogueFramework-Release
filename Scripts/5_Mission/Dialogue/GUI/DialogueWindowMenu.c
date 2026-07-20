@@ -398,7 +398,14 @@ class DialogueWindowMenu : UIScriptedMenu
 		else
 		{
 			foreach (ExpansionQuestConfig quest : validQuests)
-				m_ResponseButtons.Insert(CreateResponseButton(quest.GetTitle()));
+			{
+				int remaining;
+				string title = quest.GetTitle();
+				if (IsQuestOnCooldown(quest, remaining))
+					title = title + "  (" + ExpansionStatic.GetTimeString(remaining) + ")";
+
+				m_ResponseButtons.Insert(CreateResponseButton(title, IsQuestOnCooldown(quest, remaining)));
+			}
 		}
 	}
 
@@ -488,6 +495,19 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 		else
 		{
+			int remaining;
+			if (IsQuestOnCooldown(quest, remaining))
+			{
+				detail.SpeakerText = GetDescriptionSafe(descriptions, 0) + "\n\nNot again yet. Come back in " + ExpansionStatic.GetTimeString(remaining) + ".";
+				AddQuestResponses(detail, questText.NotYetTexts, "Another time, then.", DialogueActionType.END_CONVERSATION);
+
+				Print("[DialogueFramework] [DIAG] Quest " + quest.GetID() + " is on cooldown, " + remaining + "s remaining -- accept suppressed.");
+
+				RenderNode(detail);
+				ShowItemDisplay(quest);
+				return;
+			}
+
 			detail.SpeakerText = GetDescriptionSafe(descriptions, 0);
 			detail.VoiceLineIDs.Insert("Quest_" + quest.GetID() + "_Start");
 
@@ -497,57 +517,55 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		RenderNode(detail);
 
-		ShowRewardDisplay(quest);
+		ShowItemDisplay(quest);
 	}
 
-	protected void ShowRewardDisplay(ExpansionQuestConfig quest)
+	protected bool IsQuestOnCooldown(ExpansionQuestConfig quest, out int remaining)
+	{
+		remaining = 0;
+
+		if (!quest)
+			return false;
+
+		if (!quest.IsDailyQuest() && !quest.IsWeeklyQuest())
+			return false;
+
+		ExpansionQuestModule questModule = ExpansionQuestModule.GetModuleInstance();
+		if (!questModule)
+			return false;
+
+		ExpansionQuestPersistentData questData = questModule.GetClientQuestData();
+		if (!questData)
+			return false;
+
+		return questData.HasCooldownOnQuest(quest.GetID(), remaining);
+	}
+
+	protected void ShowItemDisplay(ExpansionQuestConfig quest)
 	{
 		if (!m_RewardStrip || !quest)
 			return;
 
-		array<ref ExpansionQuestRewardConfig> rewards = quest.GetRewards();
-		if (!rewards || rewards.Count() == 0)
-			return;
-
-		foreach (ExpansionQuestRewardConfig reward : rewards)
+		array<ref ExpansionQuestItemConfig> questItems = quest.GetQuestItems();
+		if (questItems)
 		{
-			if (!reward)
-				continue;
-
-			Widget tile = GetGame().GetWorkspace().CreateWidgets("DialogueFramework/GUI/layouts/dialogue_reward_display.layout", m_RewardStrip);
-			if (!tile)
-				continue;
-
-			string className = reward.GetClassName();
-
-			TextWidget tileName = TextWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayName"));
-			if (tileName)
+			foreach (ExpansionQuestItemConfig questItem : questItems)
 			{
-				tileName.SetText(GetItemDisplayName(className));
-				if (m_MenuConfig)
-					tileName.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseTextColor));
+				if (questItem)
+					AddItemTile(questItem.GetClassName(), questItem.GetAmount(), "given");
 			}
+		}
 
-			TextWidget tileAmount = TextWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayAmount"));
-			if (tileAmount)
-				tileAmount.SetText("x" + reward.GetAmount());
+		AddObjectiveTiles(quest);
 
-			Widget tileBackground = tile.FindAnyWidget("DialogueRewardDisplayBackground");
-			if (tileBackground && m_MenuConfig)
-				tileBackground.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseBackgroundColor));
-
-			ItemPreviewWidget tilePreview = ItemPreviewWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayPreview"));
-			if (tilePreview)
+		array<ref ExpansionQuestRewardConfig> rewards = quest.GetRewards();
+		if (rewards)
+		{
+			foreach (ExpansionQuestRewardConfig reward : rewards)
 			{
-				EntityAI tileEntity = EntityAI.Cast(GetGame().CreateObjectEx(className, vector.Zero, ECE_LOCAL|ECE_NOLIFETIME));
-				if (tileEntity)
-				{
-					m_RewardPreviewObjects.Insert(tileEntity);
-					tilePreview.SetItem(tileEntity);
-				}
+				if (reward)
+					AddItemTile(reward.GetClassName(), reward.GetAmount(), "reward");
 			}
-
-			m_RewardDisplayWidgets.Insert(tile);
 		}
 
 		if (m_RewardDisplayWidgets.Count() == 0)
@@ -557,14 +575,99 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (m_RewardStripLabel)
 			m_RewardStripLabel.Show(true);
 
-		if (m_ResponseScroll)
+		Print("[DialogueFramework] [DIAG] ShowItemDisplay -- " + m_RewardDisplayWidgets.Count() + " tile(s).");
+	}
+
+	protected void AddObjectiveTiles(ExpansionQuestConfig quest)
+	{
+		array<ref ExpansionQuestObjectiveConfigBase> objectives = quest.GetObjectives();
+		if (!objectives)
+			return;
+
+		foreach (ExpansionQuestObjectiveConfigBase objective : objectives)
 		{
-			float stripHeight = 0.30;
-			m_ResponseScroll.SetPos(m_ScrollX, m_ScrollY + stripHeight);
-			m_ResponseScroll.SetSize(m_ScrollW, m_ScrollH - stripHeight);
+			if (!objective)
+				continue;
+
+			int objectiveType = objective.GetObjectiveType();
+
+			if (objectiveType == ExpansionQuestObjectiveType.COLLECT)
+			{
+				ExpansionQuestObjectiveCollectionConfig collectConfig = ExpansionQuestObjectiveCollectionConfig.Cast(objective);
+				if (collectConfig)
+					AddDeliveryTiles(collectConfig.GetCollections());
+			}
+			else if (objectiveType == ExpansionQuestObjectiveType.DELIVERY)
+			{
+				ExpansionQuestObjectiveDeliveryConfig deliveryConfig = ExpansionQuestObjectiveDeliveryConfig.Cast(objective);
+				if (deliveryConfig)
+					AddDeliveryTiles(deliveryConfig.GetCollections());
+			}
+			else if (objectiveType == ExpansionQuestObjectiveType.CRAFTING)
+			{
+				ExpansionQuestObjectiveCraftingConfig craftingConfig = ExpansionQuestObjectiveCraftingConfig.Cast(objective);
+				if (!craftingConfig)
+					continue;
+
+				array<string> craftNames = craftingConfig.GetItemNames();
+				if (!craftNames)
+					continue;
+
+				foreach (string craftName : craftNames)
+					AddItemTile(craftName, 1, "needed");
+			}
+		}
+	}
+
+	protected void AddDeliveryTiles(array<ref ExpansionQuestObjectiveDelivery> deliveries)
+	{
+		if (!deliveries)
+			return;
+
+		foreach (ExpansionQuestObjectiveDelivery delivery : deliveries)
+		{
+			if (delivery)
+				AddItemTile(delivery.GetClassName(), delivery.GetAmount(), "needed");
+		}
+	}
+
+	protected void AddItemTile(string className, int amount, string suffix)
+	{
+		if (className == "")
+			return;
+
+		Widget tile = GetGame().GetWorkspace().CreateWidgets("DialogueFramework/GUI/layouts/dialogue_reward_display.layout", m_RewardStrip);
+		if (!tile)
+			return;
+
+		TextWidget tileName = TextWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayName"));
+		if (tileName)
+		{
+			tileName.SetText(GetItemDisplayName(className));
+			if (m_MenuConfig)
+				tileName.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseTextColor));
 		}
 
-		Print("[DialogueFramework] [DIAG] ShowRewardDisplay -- " + m_RewardDisplayWidgets.Count() + " reward tile(s).");
+		TextWidget tileAmount = TextWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayAmount"));
+		if (tileAmount)
+			tileAmount.SetText("x" + amount + " " + suffix);
+
+		Widget tileBackground = tile.FindAnyWidget("DialogueRewardDisplayBackground");
+		if (tileBackground && m_MenuConfig)
+			tileBackground.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseBackgroundColor));
+
+		ItemPreviewWidget tilePreview = ItemPreviewWidget.Cast(tile.FindAnyWidget("DialogueRewardDisplayPreview"));
+		if (tilePreview)
+		{
+			EntityAI tileEntity = EntityAI.Cast(GetGame().CreateObjectEx(className, vector.Zero, ECE_LOCAL|ECE_NOLIFETIME));
+			if (tileEntity)
+			{
+				m_RewardPreviewObjects.Insert(tileEntity);
+				tilePreview.SetItem(tileEntity);
+			}
+		}
+
+		m_RewardDisplayWidgets.Insert(tile);
 	}
 
 	protected void HideRewardDisplay()
@@ -580,12 +683,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_RewardStrip.Show(false);
 		if (m_RewardStripLabel)
 			m_RewardStripLabel.Show(false);
-
-		if (m_ResponseScroll)
-		{
-			m_ResponseScroll.SetPos(m_ScrollX, m_ScrollY);
-			m_ResponseScroll.SetSize(m_ScrollW, m_ScrollH);
-		}
 	}
 
 	protected void AddQuestResponses(DialogueNode node, array<string> texts, string defaultText, string actionType)

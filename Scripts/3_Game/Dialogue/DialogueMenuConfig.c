@@ -19,7 +19,7 @@ class DialogueMenuConfig
 	string Position = DialogueMenuPosition.BOTTOM_CENTER;
 
 	float PanelWidth = 0.6;
-	float PanelHeight = 0.42;
+	float PanelHeight = 0.52;
 
 	float OffsetX = 0.0;
 	float OffsetY = 0.0;
@@ -108,7 +108,7 @@ class DialogueMenuConfig
 		if (PanelWidth <= 0.05 || PanelWidth > 1.0)
 			PanelWidth = 0.6;
 		if (PanelHeight <= 0.05 || PanelHeight > 1.0)
-			PanelHeight = 0.42;
+			PanelHeight = 0.52;
 		if (EdgeMargin < 0 || EdgeMargin > 0.4)
 			EdgeMargin = 0.03;
 

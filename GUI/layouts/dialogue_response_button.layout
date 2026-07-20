@@ -1,7 +1,7 @@
 ButtonWidgetClass DialogueResponseButton {
  visible 1
  position 0 0
- size 1 40
+ size 0.98 40
  hexactpos 0
  vexactpos 1
  hexactsize 0
