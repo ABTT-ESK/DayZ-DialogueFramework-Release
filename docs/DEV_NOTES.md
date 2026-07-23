@@ -70,7 +70,30 @@ chain, say) is a syntax error. Keep expressions on one line or split them
 into separate statements.
 
 **Fonts can't be changed from script.** DayZ only reads them from `.layout`
-files. That's why `LayoutOverride` exists.
+files, which is why font choice is a pre-built layout set rather than a
+runtime setting.
+
+**Most layout files are generated — don't edit them.** Only these four are
+hand-written:
+
+```
+dialogue_menu.layout
+dialogue_response_button.layout
+dialogue_reward_button.layout
+dialogue_reward_display.layout
+```
+
+Everything ending `_light`, `_large` or `_compact` is produced from those by
+`tools/gen_layout_variants.py` and will be overwritten. After changing a
+master, regenerate from the repository root:
+
+```
+python tools/gen_layout_variants.py
+```
+
+The generated files are committed, so server owners never run this — it's
+only needed when the masters change. Adding a style means one entry in the
+script's `STYLES` table.
 
 ## RPC ordering
 
@@ -87,3 +110,20 @@ length to the server, drive `HumanCommandAdditives.SetTalking()` from
 [ZenExpansionAudioAI](https://github.com/ZenarchistCode/ZenExpansionAudioAI).
 Implemented independently here in its own namespace so this mod has no
 dependency on it.
+
+
+## Pre-flight
+
+`python tools/preflight.py` from the repo root, before every build. You cannot
+compile EnforceScript outside the game, so this is the only safety net.
+
+It checks brace balance, `#ifdef`/`#endif` pairing, wrapped expressions,
+ternaries, `OnSend`/`OnRecieve` field-count symmetry, and — the one that
+matters most after refactoring — **every method called is actually defined**.
+Deleting or moving a block and leaving a call behind is a compile error that
+only shows up when the server starts.
+
+It only sees this mod's own files, so anything inherited from
+`UIScriptedMenu`, a CF module base, or the engine has to be added to
+`KNOWN_EXTERNAL` at the top of the script. If it reports an undefined call for
+something that plainly exists, that is what to check first.

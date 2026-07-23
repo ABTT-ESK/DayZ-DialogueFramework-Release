@@ -1,5 +1,11 @@
 # Config Reference — every field, annotated
 
+> **Editing by hand is fine, but there's a tool.**
+> [DialogueForge](https://github.com/ABTT-ESK/DialogueForge) is a free Windows
+> app that writes these files for you, with a live preview of the in-game
+> menu and a checker for broken links. Everything below still applies —
+> the editor just fills the fields in for you.
+
 This is the complete reference for both config files, with **every possible
 field** shown and explained inline.
 
@@ -139,6 +145,7 @@ NPC's generic fallback. Split across as many files as you like.
 
 ```jsonc
 {
+  "ConfigVersion": 1,                    // <<<<< Leave this alone. Lets the mod add new settings to your file automatically when you update
   "Quests": [                            // <<<<< One entry per quest you want to customise
     {
       "QuestID": 101,                    // <<<<< The Expansion quest ID this wording applies to
@@ -158,6 +165,18 @@ NPC's generic fallback. Split across as many files as you like.
       "InProgressTexts": [               // <<<<< Buttons shown while the quest is still active
         "Still hauling timber."
       ],
+      "QuestListTexts": [                // <<<<< SPOKEN above this NPC's quest list once this quest is their furthest completed. ONE picked at random
+        "You again. Here's what's open."
+      ],
+      "NoQuestsTexts": [                 // <<<<< SPOKEN when this NPC has nothing available and this is the furthest quest of theirs the player has completed. ONE picked at random
+        "That's the last of it from me. Hana at the docks had work."
+      ],
+      "NoQuestsBackTexts": [             // <<<<< Buttons shown with it that return to the tree's RootNodeID. EVERY entry is its own button
+        "Anything else you can tell me?"
+      ],
+      "NoQuestsLeaveTexts": [            // <<<<< Buttons shown with it that end the conversation
+        "I'll head that way."
+      ],
       "RewardSelectText": "Take one."    // <<<<< SPOKEN line above the reward picker. A single string, not an array
     }
   ]
@@ -167,6 +186,38 @@ NPC's generic fallback. Split across as many files as you like.
 Anything left out falls back to plain built-in wording, so you only need
 entries for the quests you actually want to customise. **Quest wording lives
 only here** — dialogue tree files don't carry it.
+
+## Wording that follows the player's progress
+
+Two lines change as a player works through an NPC's quests: what the NPC says
+above their quest list (`QuestListTexts`) and what they say when they have
+nothing available (`NoQuestsTexts`).
+
+Both resolve the same way. The mod takes the **highest-numbered quest
+belonging to that NPC that the player has `COMPLETED`** and that has the field
+set, then picks one line from it at random. A quest belongs to an NPC if that
+NPC is listed as either its quest giver or its turn-in target.
+
+Highest ID wins, so a chain reads as "furthest along" with no extra
+configuration. An NPC can greet a newcomer one way and a veteran another:
+
+```json
+{ "QuestID": 1, "QuestListTexts": [ "First time? These are what I've got." ] },
+{ "QuestID": 7, "QuestListTexts": [ "You again. You know where the list is." ] }
+```
+
+And their parting words can point at whoever gives the next quest in the
+chain:
+
+```json
+{ "QuestID": 2, "NoQuestsTexts": [ "Wall's done. Talk to Hana — she's the one hiring now." ] }
+```
+
+If no completed quest supplies wording, both fall back to the tree's own
+arrays of the same name, then to plain built-in text. **Every array is a
+random pick**, so even one NPC with three phrasings and no per-quest wording
+stops sounding scripted. For the no-quests step, **the player always gets at
+least one working button**, so it can never trap them.
 
 ---
 
@@ -194,7 +245,9 @@ only here** — dialogue tree files don't carry it.
   "WindowBorderThickness": 2,           // <<<<< Border thickness in pixels. 0 removes the border entirely
   "VisitedResponseOpacity": 0.4,        // <<<<< How faded an option looks once the player has picked it this conversation. 1.0 = no fading. Scales the alpha of ResponseTextColor so your palette is kept
 
-  "LayoutOverride": ""                  // <<<<< Empty = use the built-in window. Set a path to YOUR OWN .layout file to change fonts or structure. See MENU_CONFIG_GUIDE.md
+  "FontStyle": "DEFAULT",               // <<<<< Built-in font and text size preset: DEFAULT, LIGHT, LARGE or COMPACT. No repacking needed
+  "ShowResponseIcons": false,           // <<<<< true adds a small hint icon on the right of each button: exit / cart / speech bubble
+  "LayoutOverride": ""                  // <<<<< Empty = use the built-in window. Set a path to YOUR OWN .layout file for anything the presets can't do. See MENU_CONFIG_GUIDE.md
 }
 ```
 
@@ -214,11 +267,27 @@ Every colour is `[Alpha, Red, Green, Blue]`, each component `0`–`255`.
 
 ## Fonts
 
-**Fonts cannot be set from this file.** DayZ only reads a font from a
-`.layout` file and offers no runtime call to change one. Use
-`LayoutOverride` with your own layout — see
-[`MENU_CONFIG_GUIDE.md`](MENU_CONFIG_GUIDE.md) for the widget names you must
-preserve.
+## Response icons
+
+`ShowResponseIcons` puts a small icon on the right-hand end of every response
+button, hinting at what clicking it does:
+
+| Icon | Shown on |
+|---|---|
+| Exit door with arrow | Anything that closes the menu — `END_CONVERSATION`, and `NONE` with `NextNodeID: -1` |
+| Shopping cart | `OPEN_TRADER` |
+| Speech bubble | Everything else — the conversation continues |
+
+Icons are tinted to your `ResponseTextColor`, so they follow your theme
+without extra settings. **Off by default**: turn it on and existing servers
+look exactly as they did.
+
+Use `FontStyle` for the four built-in presets (`DEFAULT`, `LIGHT`, `LARGE`,
+`COMPACT`). DayZ reads fonts only from `.layout` files, so each preset is a
+pre-built layout set shipped in the mod — no repacking on your side.
+
+For anything the presets can't express, `LayoutOverride` still points at your
+own layout file. See [`MENU_CONFIG_GUIDE.md`](MENU_CONFIG_GUIDE.md).
 
 ---
 

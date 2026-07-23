@@ -14,6 +14,22 @@
     "RootNodeID": 1,
     "GreetingVoiceLineIDs": [],
     "FarewellVoiceLineIDs": [],
+    "QuestListTexts": [
+        "What do you need done?",
+        "Here's what's open.",
+        "Plenty needs doing. Pick one."
+    ],
+    "NoQuestsTexts": [
+        "Nothing for you right now. Check back later.",
+        "Quiet week. Nothing needs doing."
+    ],
+    "NoQuestsBackTexts": [
+        "Let's talk about something else."
+    ],
+    "NoQuestsLeaveTexts": [
+        "I'll be going."
+    ],
+    "NoQuestsVoiceLineIDs": [],
     "Nodes": [
         {
             "ID": 1,

@@ -87,6 +87,18 @@ class DialogueManager
 
 		file.Sanitize();
 
+		//! Write any newly-added fields into the owner's file so they can see
+		//! and edit them, but only ever after a backup succeeds.
+		int loadedVersion = file.ConfigVersion;
+		if (file.UpgradeFromOlderVersion())
+		{
+			if (BackupQuestTextFile(path, loadedVersion))
+			{
+				JsonFileLoader<DialogueQuestTextFile>.JsonSaveFile(path, file);
+				Print("[DialogueFramework] Quest text file upgraded to version " + DialogueQuestTextFile.CURRENT_VERSION + " (new fields added, existing wording kept): " + path);
+			}
+		}
+
 		foreach (DialogueQuestText questText : file.Quests)
 		{
 			if (!questText)
@@ -105,6 +117,26 @@ class DialogueManager
 		}
 	}
 
+	//! Copies a quest text file aside before it is rewritten. Named after the
+	//! version it is a copy of, so an upgrade never overwrites an older
+	//! backup. If this fails the file is left completely alone.
+	protected bool BackupQuestTextFile(string path, int fromVersion)
+	{
+		string backupPath = path + ".v" + fromVersion + ".bak";
+
+		if (FileExist(backupPath))
+			return true;
+
+		if (CopyFile(path, backupPath))
+		{
+			Print("[DialogueFramework] Backed up quest text before upgrading: " + backupPath);
+			return true;
+		}
+
+		LogIssue("Could not create a backup of " + path + " -- the file was left untouched and its new fields were NOT added. Existing wording still works; add the fields by hand or open the file in DialogueForge and save it.");
+		return false;
+	}
+
 	protected void WriteQuestTextExample()
 	{
 		string path = QUEST_TEXT_FOLDER + "Example.json";
@@ -114,6 +146,7 @@ class DialogueManager
 			return;
 
 		FPrintln(f, "{");
+		FPrintln(f, "    \"ConfigVersion\": " + DialogueQuestTextFile.CURRENT_VERSION + ",");
 		FPrintln(f, "    \"Quests\": [");
 		FPrintln(f, "        {");
 		FPrintln(f, "            \"QuestID\": 9999,");
@@ -122,6 +155,10 @@ class DialogueManager
 		FPrintln(f, "            \"TurnInTexts\": [ \"It's done.\" ],");
 		FPrintln(f, "            \"NotYetTexts\": [ \"Not yet.\" ],");
 		FPrintln(f, "            \"InProgressTexts\": [ \"Still working on it.\" ],");
+		FPrintln(f, "            \"QuestListTexts\": [ \"You again. Here's what's open.\" ],");
+		FPrintln(f, "            \"NoQuestsTexts\": [ \"Nothing more from me. Try the docks.\" ],");
+		FPrintln(f, "            \"NoQuestsBackTexts\": [ \"Let's talk about something else.\" ],");
+		FPrintln(f, "            \"NoQuestsLeaveTexts\": [ \"I'll be on my way.\" ],");
 		FPrintln(f, "            \"RewardSelectText\": \"Take your pick.\"");
 		FPrintln(f, "        }");
 		FPrintln(f, "    ]");
@@ -881,6 +918,28 @@ class DialogueManager
 		FPrintln(f, "                    DECLINE_QUEST (only meaningful inside a QUEST_DETAIL");
 		FPrintln(f, "                    step), END_CONVERSATION (plays a farewell line and");
 		FPrintln(f, "                    closes)");
+		FPrintln(f, "");
+		FPrintln(f, "QuestListTexts      - what the NPC says above their live quest list.");
+		FPrintln(f, "                    ONE is picked at random per visit, so a handful of");
+		FPrintln(f, "                    phrasings stops a busy NPC sounding scripted.");
+		FPrintln(f, "                    Empty falls back to built-in wording.");
+		FPrintln(f, "NoQuestsTexts       - what the NPC says when they have nothing available");
+		FPrintln(f, "                    right now, also one at random.");
+		FPrintln(f, "                    NoQuestsBackTexts / NoQuestsLeaveTexts are");
+		FPrintln(f, "                    the buttons offered with it -- every entry is its own");
+		FPrintln(f, "                    button. Back returns to RootNodeID, Leave ends the");
+		FPrintln(f, "                    conversation. Leave all three empty and the player");
+		FPrintln(f, "                    still gets a plain Back button, never a dead end.");
+		FPrintln(f, "NoQuestsVoiceLineIDs - voice lines for that step, one picked at random.");
+		FPrintln(f, "");
+		FPrintln(f, "Wording that follows the player's progress:");
+		FPrintln(f, "  A quest can carry its own QuestListTexts and NoQuestsTexts in");
+		FPrintln(f, "  QuestText\\*.json. Both are chosen the same way -- the mod uses the");
+		FPrintln(f, "  HIGHEST-numbered quest of this NPC's the player has COMPLETED that");
+		FPrintln(f, "  fills that field, so a chain reads as 'furthest along' with no extra");
+		FPrintln(f, "  setup: an NPC greets a newcomer one way and a veteran another, and");
+		FPrintln(f, "  their 'nothing left' line can point at whoever gives the next quest.");
+		FPrintln(f, "  Both fall back to the tree's own arrays, then to built-in wording.");
 		FPrintln(f, "");
 		FPrintln(f, "Per-quest button text:");
 		FPrintln(f, "  Accept / decline / turn-in wording can be set PER QUEST in");

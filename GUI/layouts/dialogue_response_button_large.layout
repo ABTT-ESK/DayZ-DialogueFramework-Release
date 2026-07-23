@@ -31,7 +31,7 @@ ButtonWidgetClass DialogueResponseButton {
    text ""
    font "gui/fonts/sdf_MetronBook72"
    "exact text" 1
-   "exact text size" 18
+   "exact text size" 22
    "text halign" left
    "text valign" center
   }

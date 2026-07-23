@@ -62,7 +62,7 @@ PanelWidgetClass DialogueRewardDisplay {
    text ""
    font "gui/fonts/sdf_MetronBook72"
    "exact text" 1
-   "exact text size" 15
+   "exact text size" 18
    "size to text h" 0
    "size to text v" 0
    wrap 1
@@ -84,7 +84,7 @@ PanelWidgetClass DialogueRewardDisplay {
    font "gui/fonts/sdf_MetronBook72"
    "bold text" 1
    "exact text" 1
-   "exact text size" 14
+   "exact text size" 17
    "size to text h" 0
    "size to text v" 0
    "text halign" left

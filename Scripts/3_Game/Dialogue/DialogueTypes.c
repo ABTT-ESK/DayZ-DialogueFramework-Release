@@ -151,6 +151,21 @@ class DialogueTree
 	ref array<string> GreetingVoiceLineIDs;
 	ref array<string> FarewellVoiceLineIDs;
 
+	//! Lines spoken above the live quest list, one picked at random each time.
+	//! Empty = built-in wording.
+	ref array<string> QuestListTexts;
+
+	//! Fallback for when this NPC has nothing available and no completed quest
+	//! of theirs supplies its own NoQuestsTexts. One picked at random.
+	ref array<string> NoQuestsTexts;
+
+	//! Fallback buttons for that same case. Every entry is its own button.
+	ref array<string> NoQuestsBackTexts;
+	ref array<string> NoQuestsLeaveTexts;
+
+	//! Voice lines for the no-quests step, one picked at random.
+	ref array<string> NoQuestsVoiceLineIDs;
+
 	ref array<ref DialogueNode> Nodes;
 
 	void DialogueTree()
@@ -161,6 +176,11 @@ class DialogueTree
 		TraderPositions = new array<string>;
 		GreetingVoiceLineIDs = new array<string>;
 		FarewellVoiceLineIDs = new array<string>;
+		QuestListTexts = new array<string>;
+		NoQuestsTexts = new array<string>;
+		NoQuestsBackTexts = new array<string>;
+		NoQuestsLeaveTexts = new array<string>;
+		NoQuestsVoiceLineIDs = new array<string>;
 		Nodes = new array<ref DialogueNode>;
 	}
 
@@ -189,6 +209,21 @@ class DialogueTree
 
 		if (!FarewellVoiceLineIDs)
 			FarewellVoiceLineIDs = new array<string>;
+
+		if (!QuestListTexts)
+			QuestListTexts = new array<string>;
+
+		if (!NoQuestsTexts)
+			NoQuestsTexts = new array<string>;
+
+		if (!NoQuestsBackTexts)
+			NoQuestsBackTexts = new array<string>;
+
+		if (!NoQuestsLeaveTexts)
+			NoQuestsLeaveTexts = new array<string>;
+
+		if (!NoQuestsVoiceLineIDs)
+			NoQuestsVoiceLineIDs = new array<string>;
 
 		if (!Nodes)
 			Nodes = new array<ref DialogueNode>;
@@ -231,6 +266,26 @@ class DialogueTree
 		rpc.Write(FarewellVoiceLineIDs.Count());
 		foreach (string farewell : FarewellVoiceLineIDs)
 			rpc.Write(farewell);
+
+		rpc.Write(QuestListTexts.Count());
+		foreach (string questListLine : QuestListTexts)
+			rpc.Write(questListLine);
+
+		rpc.Write(NoQuestsTexts.Count());
+		foreach (string noQuestLine : NoQuestsTexts)
+			rpc.Write(noQuestLine);
+
+		rpc.Write(NoQuestsBackTexts.Count());
+		foreach (string noQuestBack : NoQuestsBackTexts)
+			rpc.Write(noQuestBack);
+
+		rpc.Write(NoQuestsLeaveTexts.Count());
+		foreach (string noQuestLeave : NoQuestsLeaveTexts)
+			rpc.Write(noQuestLeave);
+
+		rpc.Write(NoQuestsVoiceLineIDs.Count());
+		foreach (string noQuestVoice : NoQuestsVoiceLineIDs)
+			rpc.Write(noQuestVoice);
 
 		rpc.Write(Nodes.Count());
 		foreach (DialogueNode node : Nodes)
@@ -303,6 +358,56 @@ class DialogueTree
 			string farewell;
 			if (!ctx.Read(farewell)) return false;
 			FarewellVoiceLineIDs.Insert(farewell);
+		}
+
+		int questListCount;
+		if (!ctx.Read(questListCount)) return false;
+		QuestListTexts.Clear();
+		for (int qlt = 0; qlt < questListCount; qlt++)
+		{
+			string questListLine;
+			if (!ctx.Read(questListLine)) return false;
+			QuestListTexts.Insert(questListLine);
+		}
+
+		int noQuestTextCount;
+		if (!ctx.Read(noQuestTextCount)) return false;
+		NoQuestsTexts.Clear();
+		for (int nqt = 0; nqt < noQuestTextCount; nqt++)
+		{
+			string noQuestLine;
+			if (!ctx.Read(noQuestLine)) return false;
+			NoQuestsTexts.Insert(noQuestLine);
+		}
+
+		int noQuestBackCount;
+		if (!ctx.Read(noQuestBackCount)) return false;
+		NoQuestsBackTexts.Clear();
+		for (int nqb = 0; nqb < noQuestBackCount; nqb++)
+		{
+			string noQuestBack;
+			if (!ctx.Read(noQuestBack)) return false;
+			NoQuestsBackTexts.Insert(noQuestBack);
+		}
+
+		int noQuestLeaveCount;
+		if (!ctx.Read(noQuestLeaveCount)) return false;
+		NoQuestsLeaveTexts.Clear();
+		for (int nql = 0; nql < noQuestLeaveCount; nql++)
+		{
+			string noQuestLeave;
+			if (!ctx.Read(noQuestLeave)) return false;
+			NoQuestsLeaveTexts.Insert(noQuestLeave);
+		}
+
+		int noQuestVoiceCount;
+		if (!ctx.Read(noQuestVoiceCount)) return false;
+		NoQuestsVoiceLineIDs.Clear();
+		for (int nqv = 0; nqv < noQuestVoiceCount; nqv++)
+		{
+			string noQuestVoice;
+			if (!ctx.Read(noQuestVoice)) return false;
+			NoQuestsVoiceLineIDs.Insert(noQuestVoice);
 		}
 
 		int nodeCount;

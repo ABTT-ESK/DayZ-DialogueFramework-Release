@@ -1,4 +1,5 @@
 {
+    "ConfigVersion": 1,
     "Quests": [
         {
             "QuestID": 1,
@@ -21,7 +22,20 @@
                 "Still working on it.",
                 "Give me time."
             ],
-            "RewardSelectText": "Fair work deserves fair pay. Take one."
+            "RewardSelectText": "Fair work deserves fair pay. Take one.",
+            "NoQuestsTexts": [
+                "That's the last of it from me. Hana down at the docks had work, if you want more."
+            ],
+            "NoQuestsBackTexts": [
+                "Anything else you can tell me?"
+            ],
+            "NoQuestsLeaveTexts": [
+                "I'll head that way."
+            ],
+            "QuestListTexts": [
+                "First time? These are what I've got.",
+                "Here's the list. Read it properly."
+            ]
         },
         {
             "QuestID": 2,
@@ -60,7 +74,20 @@
             "InProgressTexts": [
                 "Still out there."
             ],
-            "RewardSelectText": "You earned a choice. Take one."
+            "RewardSelectText": "You earned a choice. Take one.",
+            "NoQuestsTexts": [
+                "You've cleared them out. Nothing left for me to ask of you."
+            ],
+            "NoQuestsBackTexts": [
+                "Let's talk."
+            ],
+            "NoQuestsLeaveTexts": [
+                "Take care."
+            ],
+            "QuestListTexts": [
+                "You've handled worse. Take your pick.",
+                "Still standing, then. Here."
+            ]
         }
     ]
 }

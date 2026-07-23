@@ -1,5 +1,12 @@
 # Menu Appearance Guide
 
+> **Colours are easier to pick than to type.**
+> [DialogueForge](https://github.com/ABTT-ESK/DialogueForge) has colour
+> pickers and a live preview for all of this, and always writes the values in
+> the right order — which removes the most common cause of an invisible
+> dialogue box.
+
+
 The dialogue window's position, size and colours are server-configurable —
 no repacking, no script editing.
 
@@ -123,7 +130,34 @@ jumping to a different hue.
 The state resets when the conversation closes, so options are fresh next
 time the player talks to that NPC.
 
-## Fonts, and anything else: `LayoutOverride`
+## Fonts and text size: `FontStyle`
+
+Four built-in styles, no repacking needed:
+
+| `FontStyle` | Look |
+|---|---|
+| `DEFAULT` | Metron Book, standard sizes |
+| `LIGHT` | Metron Light — thinner, less shouty |
+| `LARGE` | Metron Book at 120% — easier to read at distance or on a TV |
+| `COMPACT` | Metron Book at 85% — fits more options without scrolling |
+
+```json
+"FontStyle": "LARGE"
+```
+
+**Nothing to build.** All four styles ship inside the mod as ready-made
+layouts — set the value, restart, done. DayZ reads fonts only from `.layout`
+files and has no runtime call to change one, which is why they're pre-built
+rather than assembled on the fly.
+
+The two typefaces are what DayZ itself ships. `LARGE` and `COMPACT` change
+text sizes rather than typeface, which in practice makes a bigger difference
+to how the window feels.
+
+If a style fails to load for any reason, the mod logs it and falls back to
+`DEFAULT` rather than showing an empty window.
+
+## Anything else: `LayoutOverride`
 
 **Fonts can't be changed from the config.** The engine only reads a font
 from a `.layout` file, and there's no runtime script call to swap it — this
@@ -166,3 +200,18 @@ structural changes.
   An alpha of `0` makes the element invisible.
 - **Check the client log** for `[DialogueFramework] [UI] Panel placed at
   ...`, which reports the resolved position and the preset it came from.
+
+
+## Response icons
+
+Set `"ShowResponseIcons": true` and every response button gains a small icon on
+its right-hand end, so players can tell at a glance what a button will do:
+
+- **Exit door with arrow** — this closes the menu
+- **Shopping cart** — this opens the trader's market
+- **Speech bubble** — the conversation carries on
+
+The icons follow your `ResponseTextColor`, so they match whatever theme you
+have set. Nothing to build; they ship with the mod.
+
+It's off by default. Leave it off and your menu looks exactly as it did.

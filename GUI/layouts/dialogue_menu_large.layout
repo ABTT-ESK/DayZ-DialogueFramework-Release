@@ -43,7 +43,7 @@ PanelWidgetClass DialogueMenuRoot {
      style Bold
      "bold text" 1
      "exact text" 1
-     "exact text size" 24
+     "exact text size" 29
      "text halign" left
      "text valign" center
     }
@@ -71,7 +71,7 @@ PanelWidgetClass DialogueMenuRoot {
        font "gui/fonts/sdf_MetronBook72"
        "text offset" 5 0
        "exact text" 1
-       "exact text size" 18
+       "exact text size" 22
        wrap 1
        "condense whitespace" 1
        "strip newlines" 1
@@ -102,7 +102,7 @@ PanelWidgetClass DialogueMenuRoot {
        font "gui/fonts/sdf_MetronBook72"
        "bold text" 1
        "exact text" 1
-       "exact text size" 14
+       "exact text size" 17
        "text halign" center
        "text valign" center
       }
@@ -144,7 +144,7 @@ PanelWidgetClass DialogueMenuRoot {
        font "gui/fonts/sdf_MetronBook72"
        "bold text" 1
        "exact text" 1
-       "exact text size" 14
+       "exact text size" 17
        "text halign" center
        "text valign" center
       }
@@ -275,7 +275,7 @@ PanelWidgetClass DialogueMenuRoot {
        font "gui/fonts/sdf_MetronBook72"
        "text offset" 5 0
        "exact text" 1
-       "exact text size" 20
+       "exact text size" 24
        wrap 1
        "condense whitespace" 1
        "strip newlines" 1
@@ -311,7 +311,7 @@ PanelWidgetClass DialogueMenuRoot {
          font "gui/fonts/sdf_MetronBook72"
          "bold text" 1
          "exact text" 1
-         "exact text size" 18
+         "exact text size" 22
          "text halign" center
          "text valign" center
         }
@@ -348,7 +348,7 @@ PanelWidgetClass DialogueMenuRoot {
          font "gui/fonts/sdf_MetronBook72"
          "bold text" 1
          "exact text" 1
-         "exact text size" 18
+         "exact text size" 22
          "text halign" center
          "text valign" center
         }
@@ -388,7 +388,7 @@ PanelWidgetClass DialogueMenuRoot {
        font "gui/fonts/sdf_MetronBook24"
        "bold text" 1
        "exact text" 1
-       "exact text size" 16
+       "exact text size" 19
        "text halign" center
        "text valign" center
       }

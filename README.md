@@ -20,7 +20,7 @@ folder.** No scripting, and no repacking for anything except voice audio.
 - Responses can be locked behind quest completion
 - Live quest list per NPC, always reflecting real quest state
 - Reward picker with item previews for quests that let players choose
-- Window position, size and colours configurable per server
+- Window position, size, colours and font all configurable per server
 - Optional voice lines, with a talking animation on AI NPCs
 
 Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https://github.com/ABTT-ESK/DayZ-DialogueFramework-Release)
@@ -38,13 +38,37 @@ Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https:
    working example and a field reference.
 3. Edit those files, restart, and check `Dialogues\LoadLog.txt`.
 
+## DialogueForge — the config editor
+
+Everything here is plain JSON, so a text editor is all you strictly need. But
+a branching conversation means counting node IDs by hand, and one missing
+comma takes an NPC offline until the next restart.
+
+**[DialogueForge](https://github.com/ABTT-ESK/DialogueForge)** is a free
+Windows app that writes these files for you. No install, no Python, no
+dependencies — download it, run it, point it at your server profile folder.
+
+- Build conversations visually, with a branch map of the whole tree
+- A live preview showing the in-game menu **in your own colours and font**,
+  updating as you type
+- Pick quests and NPCs by name from your Expansion configs instead of copying
+  IDs between windows
+- One button checks every config in your folder for dead links, unreachable
+  branches, duplicate IDs and wording that can never appear
+
+It's also the easiest way to pick up new settings after a mod update: open a
+dialogue tree, save it, done. See [Updating](docs/UPDATING.md).
+
+Optional in every sense — the mod neither knows nor cares whether a file was
+written by hand or by the editor.
+
 ## Configuration
 
 Everything lives in your server profile folder:
 
 ```
 $profile:\DialogFramework\
-  MenuConfig.json              # Window position, size, colours
+  MenuConfig.json              # Window position, size, colours, font
   Dialogues\
     README.txt                 # Field reference, written for you
     LoadLog.txt                # What loaded, and what was wrong with it
@@ -64,14 +88,25 @@ Dialogue and appearance changes need a **server restart and a full client
 restart** (not just a reconnect), because both are sent to players when they
 connect.
 
+**Updating never overwrites your work.** `MenuConfig.json` and
+`QuestText\*.json` add any new settings to themselves on the next server
+start, keeping everything you wrote (quest text files are backed up first).
+Dialogue trees are deliberately left alone — they keep working as they are,
+and you pick up new tree-level options whenever you open one in
+[DialogueForge](https://github.com/ABTT-ESK/DialogueForge) and save, or add
+the keys by hand. Doing nothing is a valid choice: you just won't have the new
+options until you do. See [Updating](docs/UPDATING.md).
+
 ## Documentation
 
 | Guide | What's in it |
 |---|---|
 | [Config reference](docs/CONFIG_REFERENCE.md) | Every field of every config file, annotated. **Start here** |
 | [Dialogue trees](docs/DIALOGUE_TREE_GUIDE.md) | Writing conversations: branching, quest gating, quest wording |
-| [Window appearance](docs/MENU_CONFIG_GUIDE.md) | Position presets, colours, custom layouts |
+| [Window appearance](docs/MENU_CONFIG_GUIDE.md) | Position presets, colours, font styles, custom layouts |
 | [Voice lines](#voice-lines) | Audio format, naming, publishing your voice pack |
+| [Updating](docs/UPDATING.md) | What happens to your configs when the mod updates |
+| [DialogueForge](https://github.com/ABTT-ESK/DialogueForge) | The visual editor for these config files |
 | [Developer notes](docs/DEV_NOTES.md) | Only if you're modifying the mod itself |
 | [Changelog](CHANGELOG.md) | What changed in each release |
 | [Roadmap](ROADMAP.md) | Planned features and known limitations |

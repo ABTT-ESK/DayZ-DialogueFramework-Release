@@ -13,7 +13,7 @@ class DialogueMenuPosition
 
 class DialogueMenuConfig
 {
-	static const int CURRENT_VERSION = 1;
+	static const int CURRENT_VERSION = 3;
 	int ConfigVersion = 0;
 
 	string Position = DialogueMenuPosition.BOTTOM_CENTER;
@@ -38,6 +38,14 @@ class DialogueMenuConfig
 	int WindowBorderThickness = 2;
 
 	float VisitedResponseOpacity = 0.4;
+
+	string FontStyle = "DEFAULT";
+
+	//! Small hint icon on the right of each response button: an exit sign for
+	//! anything that closes the menu, a cart for opening the market, a speech
+	//! bubble for anything that keeps the conversation going. Off by default
+	//! so existing servers look exactly as they did.
+	bool ShowResponseIcons = false;
 
 	string LayoutOverride = "";
 
@@ -117,6 +125,10 @@ class DialogueMenuConfig
 
 		if (WindowBorderThickness < 0 || WindowBorderThickness > 20)
 			WindowBorderThickness = 2;
+
+		FontStyle.ToUpper();
+		if (FontStyle != "DEFAULT" && FontStyle != "LIGHT" && FontStyle != "LARGE" && FontStyle != "COMPACT")
+			FontStyle = "DEFAULT";
 	}
 
 	int GetColor(array<int> source)
@@ -138,8 +150,31 @@ class DialogueMenuConfig
 			VisitedResponseOpacity = 0.4;
 		}
 
+		if (ConfigVersion < 2)
+		{
+			FontStyle = "DEFAULT";
+		}
+
+		if (ConfigVersion < 3)
+		{
+			ShowResponseIcons = false;
+		}
+
 		ConfigVersion = CURRENT_VERSION;
 		return true;
+	}
+
+	//! Suffix appended to every built-in layout filename for this style.
+	string GetLayoutSuffix()
+	{
+		if (FontStyle == "LIGHT")
+			return "_light";
+		if (FontStyle == "LARGE")
+			return "_large";
+		if (FontStyle == "COMPACT")
+			return "_compact";
+
+		return "";
 	}
 
 	int GetFadedColor(array<int> source, float opacity)
@@ -220,8 +255,10 @@ class DialogueMenuConfig
 		rpc.Write(OffsetY);
 		rpc.Write(EdgeMargin);
 		rpc.Write(LayoutOverride);
+		rpc.Write(FontStyle);
 		rpc.Write(WindowBorderThickness);
 		rpc.Write(VisitedResponseOpacity);
+		rpc.Write(ShowResponseIcons);
 
 		WriteColor(rpc, BackgroundColor);
 		WriteColor(rpc, ResponseBackgroundColor);
@@ -248,8 +285,10 @@ class DialogueMenuConfig
 		if (!ctx.Read(OffsetY)) return false;
 		if (!ctx.Read(EdgeMargin)) return false;
 		if (!ctx.Read(LayoutOverride)) return false;
+		if (!ctx.Read(FontStyle)) return false;
 		if (!ctx.Read(WindowBorderThickness)) return false;
 		if (!ctx.Read(VisitedResponseOpacity)) return false;
+		if (!ctx.Read(ShowResponseIcons)) return false;
 
 		if (!ReadColor(ctx, BackgroundColor)) return false;
 		if (!ReadColor(ctx, ResponseBackgroundColor)) return false;

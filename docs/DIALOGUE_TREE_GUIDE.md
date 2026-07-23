@@ -1,5 +1,12 @@
 # Dialogue Tree Authoring Guide
 
+> **Building trees by hand is the hard way.**
+> [DialogueForge](https://github.com/ABTT-ESK/DialogueForge) draws the whole
+> conversation as a branch map, keeps node IDs consistent when you renumber,
+> and flags options that lead nowhere. This guide explains what the fields
+> mean either way.
+
+
 This is the reference for building your own dialogue trees — no code
 editing required, just JSON files dropped into a folder.
 
@@ -64,6 +71,11 @@ in it doesn't work) until you fix it.
 | `RootNodeID` | int | Which node's `ID` is shown first when the conversation opens |
 | `GreetingVoiceLineIDs` | string array | One picked at random each time the conversation opens. Empty array = no greeting audio |
 | `FarewellVoiceLineIDs` | string array | One picked at random when the conversation ends via `END_CONVERSATION` |
+| `QuestListTexts` | string array | What the NPC says above the live quest list. One picked at random. Empty = built-in wording |
+| `NoQuestsTexts` | string array | What the NPC says when they have no quests available. One picked at random. Empty = built-in wording |
+| `NoQuestsBackTexts` | string array | Buttons shown with it that return to `RootNodeID`. Every entry is its own button |
+| `NoQuestsLeaveTexts` | string array | Buttons shown with it that end the conversation |
+| `NoQuestsVoiceLineIDs` | string array | One picked at random on the no-quests step |
 | `Nodes` | node array | The actual conversation content — see below |
 
 ## `DialogueNode` fields
@@ -268,6 +280,37 @@ turned in to this NPC shows a turn-in prompt instead; a quest given by one
 NPC but turned in to a different one correctly shows nothing at the first
 NPC once started, and shows the turn-in prompt only at the correct one.
 
+
+## When the NPC has nothing to offer
+
+If a player opens the quest list and the NPC has nothing available, they get a
+real dialogue step rather than a dead end — a spoken line plus whatever buttons
+you configured.
+
+Wording is resolved in this order:
+
+1. `NoQuestsTexts` on the **highest-numbered quest of this NPC's that the player
+   has completed** (set per quest in `QuestText\*.json`). A quest counts as
+   this NPC's if they are its giver *or* its turn-in target.
+2. This tree's `NoQuestsTexts`.
+3. Plain built-in wording.
+
+Because the highest completed ID wins, a quest chain advances the NPC's parting
+line for free. Give quest 2 a `NoQuestsTexts` that points at the NPC who hands
+out quest 8, and the moment quest 2 is turned in, that becomes what they say —
+until the player completes something later in the chain.
+
+`QuestListTexts` — the line above the quest list itself — resolves by exactly
+the same rule, so a busy NPC doesn't greet a veteran the way they greet a
+stranger. Every one of these is an array with one entry picked at random, so
+even a single NPC with three phrasings and no per-quest wording reads
+differently visit to visit.
+
+Buttons work the same way: quest-level `NoQuestsBackTexts` /
+`NoQuestsLeaveTexts` if set, otherwise the tree's. Back returns to
+`RootNodeID`, Leave ends the conversation. **If you configure none of it, the
+player still gets a plain Back button** — this step can never strand them with
+only the X.
 
 ## Voice lines
 

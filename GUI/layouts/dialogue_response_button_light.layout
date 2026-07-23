@@ -29,7 +29,7 @@ ButtonWidgetClass DialogueResponseButton {
    hexactsize 0
    vexactsize 0
    text ""
-   font "gui/fonts/sdf_MetronBook72"
+   font "gui/fonts/sdf_MetronLight24"
    "exact text" 1
    "exact text size" 18
    "text halign" left
