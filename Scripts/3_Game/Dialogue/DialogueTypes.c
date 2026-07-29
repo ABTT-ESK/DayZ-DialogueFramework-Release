@@ -17,6 +17,76 @@ class DialogueActionType
 	static const string OPEN_TRADER = "OPEN_TRADER";
 }
 
+//! One candidate line for a node. When a node carries these, the menu picks
+//! one at random from the base SpeakerText plus whichever of these the player
+//! qualifies for, so a greeting can vary and a line can be revealed once a
+//! quest is completed. RequiredQuestID <= 0 means "always shown".
+class DialogueSpeakerLine
+{
+	string Text;
+
+	//! Eligibility gate: <= 0 means always in the random pool, otherwise this
+	//! line only joins the pool once the quest is COMPLETED.
+	int RequiredQuestID = -1;
+
+	//! Override gate: once this quest is COMPLETED this line stops being one of
+	//! the random options and becomes the fixed greeting. If several lines
+	//! qualify, the one with the highest OverrideQuestID wins. <= 0 = no
+	//! override.
+	int OverrideQuestID = -1;
+
+	ref array<string> VoiceLineIDs;
+
+	void DialogueSpeakerLine()
+	{
+		VoiceLineIDs = new array<string>;
+	}
+
+	void Sanitize()
+	{
+		if (RequiredQuestID <= 0)
+			RequiredQuestID = -1;
+
+		if (OverrideQuestID <= 0)
+			OverrideQuestID = -1;
+
+		if (!VoiceLineIDs)
+			VoiceLineIDs = new array<string>;
+	}
+
+	void OnSend(ScriptRPC rpc)
+	{
+		rpc.Write(Text);
+		rpc.Write(RequiredQuestID);
+
+		rpc.Write(VoiceLineIDs.Count());
+		foreach (string voiceLine : VoiceLineIDs)
+			rpc.Write(voiceLine);
+
+		rpc.Write(OverrideQuestID);
+	}
+
+	bool OnRecieve(ParamsReadContext ctx)
+	{
+		if (!ctx.Read(Text)) return false;
+		if (!ctx.Read(RequiredQuestID)) return false;
+
+		int voiceCount;
+		if (!ctx.Read(voiceCount)) return false;
+		VoiceLineIDs.Clear();
+		for (int i = 0; i < voiceCount; i++)
+		{
+			string voiceLine;
+			if (!ctx.Read(voiceLine)) return false;
+			VoiceLineIDs.Insert(voiceLine);
+		}
+
+		if (!ctx.Read(OverrideQuestID)) return false;
+
+		return true;
+	}
+}
+
 class DialogueNode
 {
 	int ID;
@@ -25,11 +95,15 @@ class DialogueNode
 
 	ref array<string> VoiceLineIDs;
 
+	//! Optional extra lines. Empty = just SpeakerText, exactly as before.
+	ref array<ref DialogueSpeakerLine> SpeakerLines;
+
 	ref array<ref DialogueResponse> Responses;
 
 	void DialogueNode()
 	{
 		VoiceLineIDs = new array<string>;
+		SpeakerLines = new array<ref DialogueSpeakerLine>;
 		Responses = new array<ref DialogueResponse>;
 	}
 
@@ -37,6 +111,15 @@ class DialogueNode
 	{
 		if (!VoiceLineIDs)
 			VoiceLineIDs = new array<string>;
+
+		if (!SpeakerLines)
+			SpeakerLines = new array<ref DialogueSpeakerLine>;
+
+		foreach (DialogueSpeakerLine line : SpeakerLines)
+		{
+			if (line)
+				line.Sanitize();
+		}
 
 		if (!Responses)
 			Responses = new array<ref DialogueResponse>;
@@ -61,6 +144,10 @@ class DialogueNode
 		rpc.Write(Responses.Count());
 		foreach (DialogueResponse response : Responses)
 			response.OnSend(rpc);
+
+		rpc.Write(SpeakerLines.Count());
+		foreach (DialogueSpeakerLine speakerLine : SpeakerLines)
+			speakerLine.OnSend(rpc);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -87,6 +174,16 @@ class DialogueNode
 			DialogueResponse response = new DialogueResponse();
 			if (!response.OnRecieve(ctx)) return false;
 			Responses.Insert(response);
+		}
+
+		int speakerLineCount;
+		if (!ctx.Read(speakerLineCount)) return false;
+		SpeakerLines.Clear();
+		for (int k = 0; k < speakerLineCount; k++)
+		{
+			DialogueSpeakerLine speakerLine = new DialogueSpeakerLine();
+			if (!speakerLine.OnRecieve(ctx)) return false;
+			SpeakerLines.Insert(speakerLine);
 		}
 
 		return true;
@@ -166,6 +263,15 @@ class DialogueTree
 	//! Voice lines for the no-quests step, one picked at random.
 	ref array<string> NoQuestsVoiceLineIDs;
 
+	//! Per-screen "back to the conversation" buttons. Each renders only on the
+	//! screen it is named for; empty falls back to the mod default (no button,
+	//! except the no-quests step which keeps its built-in Back). The no-quests
+	//! screen is still served by NoQuestsBackTexts above.
+	ref array<string> QuestListBackTexts;
+	ref array<string> OfferBackTexts;
+	ref array<string> InProgressBackTexts;
+	ref array<string> TurnInBackTexts;
+
 	ref array<ref DialogueNode> Nodes;
 
 	void DialogueTree()
@@ -181,6 +287,10 @@ class DialogueTree
 		NoQuestsBackTexts = new array<string>;
 		NoQuestsLeaveTexts = new array<string>;
 		NoQuestsVoiceLineIDs = new array<string>;
+		QuestListBackTexts = new array<string>;
+		OfferBackTexts = new array<string>;
+		InProgressBackTexts = new array<string>;
+		TurnInBackTexts = new array<string>;
 		Nodes = new array<ref DialogueNode>;
 	}
 
@@ -224,6 +334,18 @@ class DialogueTree
 
 		if (!NoQuestsVoiceLineIDs)
 			NoQuestsVoiceLineIDs = new array<string>;
+
+		if (!QuestListBackTexts)
+			QuestListBackTexts = new array<string>;
+
+		if (!OfferBackTexts)
+			OfferBackTexts = new array<string>;
+
+		if (!InProgressBackTexts)
+			InProgressBackTexts = new array<string>;
+
+		if (!TurnInBackTexts)
+			TurnInBackTexts = new array<string>;
 
 		if (!Nodes)
 			Nodes = new array<ref DialogueNode>;
@@ -286,6 +408,22 @@ class DialogueTree
 		rpc.Write(NoQuestsVoiceLineIDs.Count());
 		foreach (string noQuestVoice : NoQuestsVoiceLineIDs)
 			rpc.Write(noQuestVoice);
+
+		rpc.Write(QuestListBackTexts.Count());
+		foreach (string questListBack : QuestListBackTexts)
+			rpc.Write(questListBack);
+
+		rpc.Write(OfferBackTexts.Count());
+		foreach (string offerBack : OfferBackTexts)
+			rpc.Write(offerBack);
+
+		rpc.Write(InProgressBackTexts.Count());
+		foreach (string inProgressBack : InProgressBackTexts)
+			rpc.Write(inProgressBack);
+
+		rpc.Write(TurnInBackTexts.Count());
+		foreach (string turnInBack : TurnInBackTexts)
+			rpc.Write(turnInBack);
 
 		rpc.Write(Nodes.Count());
 		foreach (DialogueNode node : Nodes)
@@ -408,6 +546,46 @@ class DialogueTree
 			string noQuestVoice;
 			if (!ctx.Read(noQuestVoice)) return false;
 			NoQuestsVoiceLineIDs.Insert(noQuestVoice);
+		}
+
+		int questListBackCount;
+		if (!ctx.Read(questListBackCount)) return false;
+		QuestListBackTexts.Clear();
+		for (int qlb = 0; qlb < questListBackCount; qlb++)
+		{
+			string questListBack;
+			if (!ctx.Read(questListBack)) return false;
+			QuestListBackTexts.Insert(questListBack);
+		}
+
+		int offerBackCount;
+		if (!ctx.Read(offerBackCount)) return false;
+		OfferBackTexts.Clear();
+		for (int ob = 0; ob < offerBackCount; ob++)
+		{
+			string offerBack;
+			if (!ctx.Read(offerBack)) return false;
+			OfferBackTexts.Insert(offerBack);
+		}
+
+		int inProgressBackCount;
+		if (!ctx.Read(inProgressBackCount)) return false;
+		InProgressBackTexts.Clear();
+		for (int ipb = 0; ipb < inProgressBackCount; ipb++)
+		{
+			string inProgressBack;
+			if (!ctx.Read(inProgressBack)) return false;
+			InProgressBackTexts.Insert(inProgressBack);
+		}
+
+		int turnInBackCount;
+		if (!ctx.Read(turnInBackCount)) return false;
+		TurnInBackTexts.Clear();
+		for (int tib = 0; tib < turnInBackCount; tib++)
+		{
+			string turnInBack;
+			if (!ctx.Read(turnInBack)) return false;
+			TurnInBackTexts.Insert(turnInBack);
 		}
 
 		int nodeCount;

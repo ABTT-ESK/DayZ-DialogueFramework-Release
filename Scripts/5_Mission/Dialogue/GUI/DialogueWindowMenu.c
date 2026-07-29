@@ -120,6 +120,17 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected bool m_StripHasReward;
 	protected int m_SelectedRewardIndex = -1;
 
+	//! Objective-item ("hand in any one of these") selection state. Expansion's
+	//! server rejects a turn-in with objItemIndex -1 when a collection objective
+	//! has NeedAnyCollection set (see ExpansionQuestObjectiveCollectionEventBase
+	//! CleanupObjectiveItems), so the framework has to resolve a real collection
+	//! index before turning in -- auto-picking when there is only one valid
+	//! choice and offering a picker when there is more than one.
+	protected bool m_ShowingObjItemList;
+	protected int m_SelectedObjItemIndex = -1;
+	protected ref array<ref ExpansionQuestObjectiveDelivery> m_ObjItemChoices;
+	protected ref array<int> m_ObjItemChoiceIndices;
+
 	protected bool m_OpeningTrader;
 
 	protected ExpansionNPCBase m_TalkingNPC;
@@ -140,6 +151,8 @@ class DialogueWindowMenu : UIScriptedMenu
 		m_RewardPreviewObjects = new array<EntityAI>;
 		m_VisitedResponses = new map<string, bool>;
 		m_RewardDisplayWidgets = new array<Widget>;
+		m_ObjItemChoices = new array<ref ExpansionQuestObjectiveDelivery>;
+		m_ObjItemChoiceIndices = new array<int>;
 	}
 
 	override Widget Init()
@@ -347,16 +360,28 @@ class DialogueWindowMenu : UIScriptedMenu
 		m_ActiveNode = node;
 		m_ShowingQuestList = false;
 		m_ShowingRewardList = false;
+		m_ShowingObjItemList = false;
 		m_SelectedRewardIndex = -1;
 		HideRewardConfirm();
 		HideRewardDisplay();
 
 		array<ref DialogueResponse> visible = GetVisibleResponses(node);
 
+		//! Resolve which line (and matching voice pool) this node speaks.
+		string spokenText = node.SpeakerText;
+		array<string> spokenVoicePool = node.VoiceLineIDs;
+		DialogueSpeakerLine chosenLine = PickSpeakerLine(node);
+		if (chosenLine)
+		{
+			spokenText = chosenLine.Text;
+			if (chosenLine.VoiceLineIDs && chosenLine.VoiceLineIDs.Count() > 0)
+				spokenVoicePool = chosenLine.VoiceLineIDs;
+		}
+
 		if (m_SpeakerName)
 			m_SpeakerName.SetText(m_NPCName);
 		if (m_SpeakerLine)
-			SetSpeakerLine(node.SpeakerText);
+			SetSpeakerLine(spokenText);
 
 		ClearButtons();
 
@@ -369,9 +394,8 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		StopDialogueVoice();
 
-		array<string> nodeVoicePool = node.VoiceLineIDs;
-		if (nodeVoicePool)
-			PlayRandomVoiceLine(nodeVoicePool);
+		if (spokenVoicePool)
+			PlayRandomVoiceLine(spokenVoicePool);
 	}
 
 	protected array<ref DialogueResponse> GetVisibleResponses(DialogueNode node)
@@ -392,14 +416,78 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected bool PassesGating(DialogueResponse response)
 	{
-		if (response.RequiredQuestID <= 0)
+		return QuestGatePasses(response.RequiredQuestID);
+	}
+
+	//! Shared quest-completion gate, used by both response visibility and the
+	//! per-line speaker gating. A quest ID <= 0 is an open gate.
+	protected bool QuestGatePasses(int requiredQuestID)
+	{
+		if (requiredQuestID <= 0)
 			return true;
 
 		ExpansionQuestPersistentData questData = ExpansionQuestModule.GetModuleInstance().GetClientQuestData();
 		if (!questData)
 			return false;
 
-		return questData.GetQuestStateByQuestID(response.RequiredQuestID) == ExpansionQuestState.COMPLETED;
+		return questData.GetQuestStateByQuestID(requiredQuestID) == ExpansionQuestState.COMPLETED;
+	}
+
+	//! Chooses which line the node speaks. With SpeakerLines set, one is drawn
+	//! at random from those the player qualifies for, plus the base SpeakerText
+	//! when it has text - so a node with both varies across all of them.
+	//! Returns null to mean "use the node's own SpeakerText / VoiceLineIDs",
+	//! which also covers the case where every extra line is locked away.
+	protected DialogueSpeakerLine PickSpeakerLine(DialogueNode node)
+	{
+		if (!node.SpeakerLines || node.SpeakerLines.Count() == 0)
+			return null;
+
+		//! Override wins over the random pool: a line whose override quest is
+		//! completed becomes the fixed greeting. Highest override quest ID wins
+		//! when more than one qualifies, so it reads as "furthest along". A
+		//! line's own lock still has to pass for its override to apply.
+		DialogueSpeakerLine overrideLine = null;
+		int overrideBest = -1;
+		foreach (DialogueSpeakerLine candidate : node.SpeakerLines)
+		{
+			if (!candidate)
+				continue;
+			if (candidate.OverrideQuestID <= 0)
+				continue;
+			if (candidate.OverrideQuestID <= overrideBest)
+				continue;
+			if (!QuestGatePasses(candidate.OverrideQuestID))
+				continue;
+			if (!QuestGatePasses(candidate.RequiredQuestID))
+				continue;
+
+			overrideBest = candidate.OverrideQuestID;
+			overrideLine = candidate;
+		}
+
+		if (overrideLine)
+			return overrideLine;
+
+		array<ref DialogueSpeakerLine> pool = new array<ref DialogueSpeakerLine>;
+		foreach (DialogueSpeakerLine line : node.SpeakerLines)
+		{
+			if (line && QuestGatePasses(line.RequiredQuestID))
+				pool.Insert(line);
+		}
+
+		if (pool.Count() == 0)
+			return null;
+
+		int baseWeight = 0;
+		if (node.SpeakerText != "")
+			baseWeight = 1;
+
+		int pick = Math.RandomInt(0, pool.Count() + baseWeight);
+		if (pick >= pool.Count())
+			return null;
+
+		return pool.Get(pick);
 	}
 
 	protected void OnDialogueResponseSelected(DialogueResponse response)
@@ -486,6 +574,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		m_ShowingQuestList = true;
 		m_ShowingRewardList = false;
+		m_ShowingObjItemList = false;
 
 		if (m_SpeakerName)
 			m_SpeakerName.SetText(m_NPCName);
@@ -503,6 +592,15 @@ class DialogueWindowMenu : UIScriptedMenu
 				title = title + "  (" + ExpansionStatic.GetTimeString(remaining) + ")";
 
 			m_ResponseButtons.Insert(CreateResponseButton(title, IsQuestOnCooldown(quest, remaining), ICON_CHAT));
+		}
+
+		//! Back-to-conversation buttons come after the quests. Their user IDs run
+		//! past m_CurrentQuests.Count(), which OnClick reads as "return to root".
+		array<string> backTexts = ResolveQuestListBackTexts();
+		if (backTexts)
+		{
+			foreach (string backText : backTexts)
+				m_ResponseButtons.Insert(CreateResponseButton(backText, false, ICON_CHAT));
 		}
 	}
 
@@ -667,6 +765,136 @@ class DialogueWindowMenu : UIScriptedMenu
 		response.RequiredQuestID = -1;
 		response.ActionType = actionType;
 		return response;
+	}
+
+	//! Each quest screen has its own "back to the conversation" wording so a
+	//! player is never stuck with the X or a quest-ending answer as their only
+	//! way out. Resolution is per-quest override -> NPC (tree) default -> none.
+
+	//! Chooses back wording: the quest's own override if it set one, otherwise
+	//! the NPC's Quest talk default, otherwise none.
+	protected array<string> ResolveBackTexts(array<string> perQuest, array<string> treeLevel)
+	{
+		if (perQuest && perQuest.Count() > 0)
+			return perQuest;
+
+		if (treeLevel && treeLevel.Count() > 0)
+			return treeLevel;
+
+		return null;
+	}
+
+	protected static const int BACK_SCREEN_OFFER = 0;
+	protected static const int BACK_SCREEN_INPROGRESS = 1;
+	protected static const int BACK_SCREEN_TURNIN = 2;
+
+	//! Back wording for a quest detail screen. questText is this quest's
+	//! override (never null here -- ShowQuestDetail defaults it); screen picks
+	//! the field. The cooldown screen renders in the offer branch, so it shares
+	//! the offer screen's wording.
+	protected array<string> ResolveDetailBackTexts(DialogueQuestText questText, int screen)
+	{
+		array<string> perQuest = null;
+		array<string> treeLevel = null;
+
+		if (screen == BACK_SCREEN_INPROGRESS)
+		{
+			if (questText) perQuest = questText.InProgressBackTexts;
+			if (m_ActiveTree) treeLevel = m_ActiveTree.InProgressBackTexts;
+		}
+		else if (screen == BACK_SCREEN_TURNIN)
+		{
+			if (questText) perQuest = questText.TurnInBackTexts;
+			if (m_ActiveTree) treeLevel = m_ActiveTree.TurnInBackTexts;
+		}
+		else
+		{
+			if (questText) perQuest = questText.OfferBackTexts;
+			if (m_ActiveTree) treeLevel = m_ActiveTree.OfferBackTexts;
+		}
+
+		return ResolveBackTexts(perQuest, treeLevel);
+	}
+
+	//! Back wording for the quest list. The list is not one quest, so its
+	//! per-quest override comes from the furthest-completed quest of this NPC's
+	//! that set QuestListBackTexts -- the same "furthest along" rule the list
+	//! greeting uses -- then the NPC's Quest talk default.
+	protected array<string> ResolveQuestListBackTexts()
+	{
+		array<string> treeLevel = null;
+		if (m_ActiveTree)
+			treeLevel = m_ActiveTree.QuestListBackTexts;
+
+		return ResolveBackTexts(FindProgressBackTexts(), treeLevel);
+	}
+
+	protected array<string> FindProgressBackTexts()
+	{
+		if (m_NPCID == -1)
+			return null;
+
+		ExpansionQuestPersistentData questData = ExpansionQuestModule.GetModuleInstance().GetClientQuestData();
+		if (!questData)
+			return null;
+
+		map<int, ref ExpansionQuestConfig> allConfigs = ExpansionQuestModule.GetModuleInstance().GetQuestConfigs();
+		if (!allConfigs)
+			return null;
+
+		array<string> best = null;
+		int bestID = -1;
+
+		foreach (int questID, ExpansionQuestConfig questConfig : allConfigs)
+		{
+			if (questID <= bestID)
+				continue;
+
+			if (questData.GetQuestStateByQuestID(questID) != ExpansionQuestState.COMPLETED)
+				continue;
+
+			if (!QuestBelongsToThisNPC(questConfig))
+				continue;
+
+			DialogueQuestText candidate = DialogueManager.GetInstance().GetQuestText(questID);
+			if (!candidate || !candidate.QuestListBackTexts || candidate.QuestListBackTexts.Count() == 0)
+				continue;
+
+			bestID = questID;
+			best = candidate.QuestListBackTexts;
+		}
+
+		return best;
+	}
+
+	//! Appends back-to-conversation buttons to a node, each routing to the
+	//! tree's root so the player drops back into the greeting.
+	protected void AddBackToConversationResponses(DialogueNode node, array<string> backTexts)
+	{
+		if (!node || !m_ActiveTree)
+			return;
+
+		if (!backTexts || backTexts.Count() == 0)
+			return;
+
+		foreach (string backText : backTexts)
+			node.Responses.Insert(BuildNoQuestsResponse(backText, m_ActiveTree.RootNodeID, DialogueActionType.NONE));
+	}
+
+	//! Returns to the root node without replaying the greeting voice line, used
+	//! by the back-to-conversation button on the quest list. Deferred so the
+	//! buttons are not rebuilt from inside the click that triggered it.
+	protected void ReturnToRootDeferred()
+	{
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(ExecuteReturnToRoot, 0, false);
+	}
+
+	protected void ExecuteReturnToRoot()
+	{
+		if (!m_ActiveTree)
+			return;
+
+		RenderNode(FindNode(m_ActiveTree, m_ActiveTree.RootNodeID));
 	}
 
 	//! Which pool a lookup is after. Both use the same selection rule.
@@ -837,6 +1065,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 			AddQuestResponses(detail, questText.TurnInTexts, "Here you go.", DialogueActionType.TURN_IN_QUEST);
 			AddQuestResponses(detail, questText.NotYetTexts, "Not yet.", DialogueActionType.END_CONVERSATION);
+			AddBackToConversationResponses(detail, ResolveDetailBackTexts(questText, BACK_SCREEN_TURNIN));
 		}
 		else if (state == ExpansionQuestState.STARTED)
 		{
@@ -844,6 +1073,7 @@ class DialogueWindowMenu : UIScriptedMenu
 			detail.VoiceLineIDs.Insert("Quest_" + quest.GetID() + "_InProgress");
 
 			AddQuestResponses(detail, questText.InProgressTexts, "Still working on it.", DialogueActionType.END_CONVERSATION);
+			AddBackToConversationResponses(detail, ResolveDetailBackTexts(questText, BACK_SCREEN_INPROGRESS));
 		}
 		else
 		{
@@ -852,6 +1082,7 @@ class DialogueWindowMenu : UIScriptedMenu
 			{
 				detail.SpeakerText = GetDescriptionSafe(descriptions, 0) + "\n\nNot again yet. Come back in " + ExpansionStatic.GetTimeString(remaining) + ".";
 				AddQuestResponses(detail, questText.NotYetTexts, "Another time, then.", DialogueActionType.END_CONVERSATION);
+				AddBackToConversationResponses(detail, ResolveDetailBackTexts(questText, BACK_SCREEN_OFFER));
 
 				Print("[DialogueFramework] [DIAG] Quest " + quest.GetID() + " is on cooldown, " + remaining + "s remaining -- accept suppressed.");
 
@@ -865,6 +1096,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 			AddQuestResponses(detail, questText.AcceptTexts, "I'll take it.", DialogueActionType.ACCEPT_QUEST);
 			AddQuestResponses(detail, questText.DeclineTexts, "Not interested.", DialogueActionType.DECLINE_QUEST);
+			AddBackToConversationResponses(detail, ResolveDetailBackTexts(questText, BACK_SCREEN_OFFER));
 		}
 
 		RenderNode(detail);
@@ -1416,18 +1648,176 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 		}
 
+		//! Resolve the collection index BEFORE anything else. A NeedAnyCollection
+		//! objective handed in with index -1 is rejected server-side, which is the
+		//! "Quest turn-In failed! / Something went wrong.." toast. If a picker is
+		//! needed the turn-in continues from ExecutePendingObjItemSelection.
+		m_SelectedObjItemIndex = -1;
+
 		ExpansionQuestConfig quest = ExpansionQuestModule.GetModuleInstance().GetQuestConfigByID(m_ActiveQuestID);
+		if (!quest)
+		{
+			EndConversation();
+			return;
+		}
+
+		if (PrepareObjectiveItemSelection(quest))
+		{
+			Print("[DialogueFramework] [DIAG] TurnInActiveQuest() -- quest " + m_ActiveQuestID + " needs objective-item selection, showing picker.");
+			return;
+		}
+
+		ContinueTurnIn(quest);
+	}
+
+	//! Turn-in for whatever remains after the objective item is resolved: either
+	//! a reward picker, or the actual turn-in RPC carrying the resolved index.
+	protected void ContinueTurnIn(ExpansionQuestConfig quest)
+	{
 		if (quest && quest.NeedToSelectReward() && quest.GetRewards() && quest.GetRewards().Count() > 1)
 		{
-			Print("[DialogueFramework] [DIAG] TurnInActiveQuest() -- quest " + m_ActiveQuestID + " needs reward selection, showing picker.");
+			Print("[DialogueFramework] [DIAG] ContinueTurnIn() -- quest " + m_ActiveQuestID + " needs reward selection, showing picker. objItemIndex=" + m_SelectedObjItemIndex);
 			ShowRewardSelection(quest);
 			return;
 		}
 
-		ExpansionQuestModule.GetModuleInstance().RequestTurnInQuestClient(m_ActiveQuestID, false, null, -1);
+		Print("[DialogueFramework] [DIAG] ContinueTurnIn() -- turning in quest " + m_ActiveQuestID + " objItemIndex=" + m_SelectedObjItemIndex);
+		ExpansionQuestModule.GetModuleInstance().RequestTurnInQuestClient(m_ActiveQuestID, false, null, m_SelectedObjItemIndex);
 
 		m_ActiveQuestID = -1;
 		EndConversation();
+	}
+
+	//! Works out which collection item index this turn-in should carry.
+	//!  - No NeedAnyCollection objective            -> leaves index -1, returns false (turn in now).
+	//!  - Objective has a single collection defined  -> index 0, returns false (only one possible).
+	//!  - Exactly one satisfied collection           -> that index, returns false (auto-pick).
+	//!  - More than one satisfied collection          -> shows the picker, returns true.
+	//! Mirrors Expansion's own menu, which drives the index from the FIRST
+	//! NeedAnyCollection objective it finds.
+	protected bool PrepareObjectiveItemSelection(ExpansionQuestConfig quest)
+	{
+		m_ObjItemChoices.Clear();
+		m_ObjItemChoiceIndices.Clear();
+
+		array<ref ExpansionQuestObjectiveConfigBase> objectives = quest.GetObjectives();
+		if (!objectives)
+			return false;
+
+		ExpansionQuestPersistentData questData = ExpansionQuestModule.GetModuleInstance().GetClientQuestData();
+		ExpansionQuestPersistentQuestData perQuest;
+		if (questData)
+			perQuest = questData.GetQuestDataByQuestID(m_ActiveQuestID);
+
+		for (int i = 0; i < objectives.Count(); i++)
+		{
+			ExpansionQuestObjectiveConfigBase objective = objectives[i];
+			if (!objective || objective.GetObjectiveType() != ExpansionQuestObjectiveType.COLLECT)
+				continue;
+
+			ExpansionQuestObjectiveCollectionConfig collectConfig = ExpansionQuestObjectiveCollectionConfig.Cast(objective);
+			if (!collectConfig || !collectConfig.NeedAnyCollection())
+				continue;
+
+			array<ref ExpansionQuestObjectiveDelivery> collections = collectConfig.GetCollections();
+			if (!collections || collections.Count() == 0)
+				continue;
+
+			//! Only one collection defined -> only one possible index. Pick it
+			//! outright so the turn-in works even if the client objective data
+			//! has not caught up yet.
+			if (collections.Count() == 1)
+			{
+				m_SelectedObjItemIndex = 0;
+				return false;
+			}
+
+			ExpansionQuestObjectiveData objData;
+			if (perQuest)
+				objData = perQuest.GetObjectiveByIndex(i);
+
+			for (int j = 0; j < collections.Count(); j++)
+			{
+				ExpansionQuestObjectiveDelivery collection = collections[j];
+				if (!collection)
+					continue;
+
+				int have = 0;
+				if (objData)
+					have = objData.GetDeliveryCountByIndex(j);
+
+				if (have >= collection.GetAmount())
+				{
+					m_ObjItemChoices.Insert(collection);
+					m_ObjItemChoiceIndices.Insert(j);
+				}
+			}
+
+			//! The first NeedAnyCollection objective drives the index, matching
+			//! the stock menu. Stop after it.
+			break;
+		}
+
+		if (m_ObjItemChoiceIndices.Count() == 0)
+			return false;
+
+		if (m_ObjItemChoiceIndices.Count() == 1)
+		{
+			m_SelectedObjItemIndex = m_ObjItemChoiceIndices[0];
+			return false;
+		}
+
+		ShowObjectiveItemSelection();
+		return true;
+	}
+
+	protected void ShowObjectiveItemSelection()
+	{
+		StopDialogueVoice();
+
+		m_ShowingQuestList = false;
+		m_ShowingRewardList = false;
+		m_ShowingObjItemList = true;
+		HideRewardDisplay();
+
+		Print("[DialogueFramework] [DIAG] ShowObjectiveItemSelection() -- " + m_ObjItemChoices.Count() + " collection option(s).");
+
+		if (m_SpeakerName)
+			m_SpeakerName.SetText(m_NPCName);
+		if (m_SpeakerLine)
+			SetSpeakerLine(PickObjItemPrompt());
+
+		ClearButtons();
+
+		for (int c = 0; c < m_ObjItemChoices.Count(); c++)
+		{
+			ExpansionQuestObjectiveDelivery choice = m_ObjItemChoices[c];
+			if (choice)
+				m_ResponseButtons.Insert(CreateItemChoiceButton(choice.GetClassName(), choice.GetAmount()));
+		}
+	}
+
+	protected string PickObjItemPrompt()
+	{
+		return "Which will you hand over?";
+	}
+
+	protected int m_PendingObjItemChoice = -1;
+
+	protected void ExecutePendingObjItemSelection()
+	{
+		int choice = m_PendingObjItemChoice;
+		m_PendingObjItemChoice = -1;
+		if (choice < 0 || choice >= m_ObjItemChoiceIndices.Count())
+			return;
+
+		m_SelectedObjItemIndex = m_ObjItemChoiceIndices[choice];
+		m_ShowingObjItemList = false;
+
+		Print("[DialogueFramework] [DIAG] ExecutePendingObjItemSelection() -- chose collection index " + m_SelectedObjItemIndex);
+
+		ExpansionQuestConfig quest = ExpansionQuestModule.GetModuleInstance().GetQuestConfigByID(m_ActiveQuestID);
+		ContinueTurnIn(quest);
 	}
 
 	protected void ShowRewardSelection(ExpansionQuestConfig quest)
@@ -1436,6 +1826,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		m_ShowingQuestList = false;
 		m_ShowingRewardList = true;
+		m_ShowingObjItemList = false;
 		HideRewardDisplay();
 
 		array<ref ExpansionQuestRewardConfig> configuredRewards = quest.GetRewards();
@@ -1463,14 +1854,23 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected Widget CreateRewardButton(ExpansionQuestRewardConfig reward)
 	{
-		if (!m_ResponseList || !reward)
+		if (!reward)
+			return null;
+
+		return CreateItemChoiceButton(reward.GetClassName(), reward.GetAmount());
+	}
+
+	//! Shared item button used by both the reward picker and the objective-item
+	//! picker: an item preview, its display name and an amount. Both pickers
+	//! route clicks by button user ID, so the caller keeps the parallel arrays.
+	protected Widget CreateItemChoiceButton(string className, int amount)
+	{
+		if (!m_ResponseList)
 			return null;
 
 		Widget button = GetGame().GetWorkspace().CreateWidgets(LayoutPath("dialogue_reward_button"), m_ResponseList);
 		if (!button)
 			return null;
-
-		string className = reward.GetClassName();
 
 		TextWidget nameLabel = TextWidget.Cast(button.FindAnyWidget("DialogueRewardName"));
 		if (nameLabel)
@@ -1478,7 +1878,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		TextWidget amountLabel = TextWidget.Cast(button.FindAnyWidget("DialogueRewardAmount"));
 		if (amountLabel)
-			amountLabel.SetText("x" + reward.GetAmount());
+			amountLabel.SetText("x" + amount);
 
 		ItemPreviewWidget preview = ItemPreviewWidget.Cast(button.FindAnyWidget("DialogueRewardPreview"));
 		if (preview)
@@ -1642,10 +2042,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!reward)
 			return;
 
-		Print("[DialogueFramework] [DIAG] ExecutePendingRewardSelection() -- turning in quest " + m_ActiveQuestID + " with reward " + reward.GetClassName());
+		Print("[DialogueFramework] [DIAG] ExecutePendingRewardSelection() -- turning in quest " + m_ActiveQuestID + " with reward " + reward.GetClassName() + " objItemIndex=" + m_SelectedObjItemIndex);
 
 		if (m_ActiveQuestID != -1)
-			ExpansionQuestModule.GetModuleInstance().RequestTurnInQuestClient(m_ActiveQuestID, true, reward, -1);
+			ExpansionQuestModule.GetModuleInstance().RequestTurnInQuestClient(m_ActiveQuestID, true, reward, m_SelectedObjItemIndex);
 
 		m_ActiveQuestID = -1;
 		m_ShowingRewardList = false;
@@ -1943,14 +2343,18 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 		m_ResponseButtons.Clear();
 
-		DestroyRewardPreviews();
-
 		foreach (Widget rewardTile : m_RewardDisplayWidgets)
 		{
 			if (rewardTile)
 				rewardTile.Unlink();
 		}
 		m_RewardDisplayWidgets.Clear();
+
+		//! Delete the preview entities only AFTER every ItemPreviewWidget that
+		//! referenced them has been unlinked. Deleting an entity still bound to
+		//! a live preview widget leaks its slot in the engine's limited preview
+		//! pool, and once that pool is exhausted later previews render blank.
+		DestroyRewardPreviews();
 
 		if (m_ResponseScroll)
 			m_ResponseScroll.VScrollToPos01(0);
@@ -2005,7 +2409,16 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (idx < 0)
 			return false;
 
-		if (m_ShowingRewardList)
+		if (m_ShowingObjItemList)
+		{
+			if (idx >= m_ObjItemChoiceIndices.Count())
+				return true;
+
+			Print("[DialogueFramework] [DIAG] OnClick -> objective item chosen idx=" + idx);
+			m_PendingObjItemChoice = idx;
+			GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(ExecutePendingObjItemSelection, 0, false);
+		}
+		else if (m_ShowingRewardList)
 		{
 			if (idx >= m_CurrentRewards.Count())
 				return true;
@@ -2016,7 +2429,12 @@ class DialogueWindowMenu : UIScriptedMenu
 		else if (m_ShowingQuestList)
 		{
 			if (idx >= m_CurrentQuests.Count())
+			{
+				//! A button past the quest range is a back-to-conversation button.
+				Print("[DialogueFramework] [DIAG] OnClick -> quest list back to conversation.");
+				ReturnToRootDeferred();
 				return true;
+			}
 
 			Print("[DialogueFramework] [DIAG] OnClick -> quest selected idx=" + idx);
 			OnQuestSelectedFromList(m_CurrentQuests[idx]);
@@ -2103,6 +2521,16 @@ class DialogueWindowMenu : UIScriptedMenu
 	{
 		Print("[DialogueFramework] [DIAG] DialogueWindowMenu.OnHide() fired.");
 		StopDialogueVoice();
+
+		//! Release the item previews here, on the reliable close hook, rather
+		//! than waiting on the destructor -- the script object can outlive the
+		//! closed menu by a frame or two, and until its previews are deleted
+		//! their slots in the engine's preview pool stay taken, so the next
+		//! time the menu opens the pictures come up blank. This covers every
+		//! close path: the X, accepting/handing in a quest, and the game
+		//! closing the menu when something like the quest log opens over it.
+		ClearButtons();
+
 		UnlockPlayerMovement();
 		super.OnHide();
 	}

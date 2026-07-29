@@ -7,6 +7,49 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.1.1]
+
+Shout out to "Too Often Played" for the bug reports that helped push most fixes this round.
+
+### Added
+- **Per-screen "back to the conversation" buttons.** Previously the only way
+  out of a quest screen was the X or an answer that ends the chat, and the
+  tree's back-button wording was read only on the "nothing available" step.
+  Every quest screen — the quest list, the offer, in-progress and turn-in
+  screens, and the no-quests step — now shows its own back button that returns
+  to the greeting without ending the conversation. Each screen has its own
+  wording so an NPC can say something different on each (`QuestListBackTexts`,
+  `OfferBackTexts`, `InProgressBackTexts`, `TurnInBackTexts`, and the existing
+  `NoQuestsBackTexts`). Set NPC-wide defaults on the Quest talk tab, or override
+  per quest on the Quest wording tab; resolution is per-quest → NPC default →
+  none. The cooldown screen shares the offer wording. QuestText files add these
+  fields automatically on the next server start (file version 2). All optional:
+  a screen with nothing set shows no back button, exactly as before.
+- **Quests with a "hand in any one of these" objective could not be turned in
+  through dialogue.** Handing a quest in from the dialogue window always told
+  Expansion the collection index was `-1`. For a collection objective with
+  `NeedAnyCollection` set, the server rejects that index and aborts the
+  turn-in, which surfaced only as an Expansion "Quest turn-In failed /
+  Something went wrong" toast with nothing in the logs. The same quests turned
+  in fine through the stock menu, which resolves the index for you, so the
+  fault looked like it belonged to Expansion rather than to an active NPC
+  dialogue file. The dialogue window now resolves a real collection index
+  before turning in: it picks the only option automatically when a
+  `NeedAnyCollection` objective defines a single collection or the player has
+  satisfied exactly one, and shows an item picker — the same preview tiles as
+  the reward picker — when more than one collection is satisfied, chaining into
+  the reward picker afterwards if the quest also lets the player choose a
+  reward. Quests without a `NeedAnyCollection` objective are unaffected
+- **Item previews went blank after reopening the dialogue.** Closing the window
+  — with the X, by handing a quest in, or by the game closing it when the quest
+  log opened — left the preview items alive a moment longer than the menu, so
+  their slots in the engine's limited preview pool stayed taken and the next
+  quest you looked at showed blank pictures. The previews are now released the
+  instant the window hides, and only after their widgets are gone, so they no
+  longer pile up.
+
+---
+
 ## [1.1.0]
 
 Existing configs keep working untouched. Every new setting is optional and

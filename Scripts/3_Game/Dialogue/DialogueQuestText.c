@@ -21,6 +21,15 @@ class DialogueQuestText
 	ref array<string> NoQuestsBackTexts;
 	ref array<string> NoQuestsLeaveTexts;
 
+	//! Per-screen "back to the conversation" buttons, overriding this quest's
+	//! NPC's Quest talk defaults for the screens this quest drives. Empty falls
+	//! back to the tree, then to the mod default. NoQuestsBackTexts above still
+	//! serves the no-quests screen.
+	ref array<string> QuestListBackTexts;
+	ref array<string> OfferBackTexts;
+	ref array<string> InProgressBackTexts;
+	ref array<string> TurnInBackTexts;
+
 	string RewardSelectText = "";
 
 	void DialogueQuestText()
@@ -34,6 +43,10 @@ class DialogueQuestText
 		NoQuestsTexts = new array<string>;
 		NoQuestsBackTexts = new array<string>;
 		NoQuestsLeaveTexts = new array<string>;
+		QuestListBackTexts = new array<string>;
+		OfferBackTexts = new array<string>;
+		InProgressBackTexts = new array<string>;
+		TurnInBackTexts = new array<string>;
 	}
 
 	void Sanitize()
@@ -56,6 +69,14 @@ class DialogueQuestText
 			NoQuestsBackTexts = new array<string>;
 		if (!NoQuestsLeaveTexts)
 			NoQuestsLeaveTexts = new array<string>;
+		if (!QuestListBackTexts)
+			QuestListBackTexts = new array<string>;
+		if (!OfferBackTexts)
+			OfferBackTexts = new array<string>;
+		if (!InProgressBackTexts)
+			InProgressBackTexts = new array<string>;
+		if (!TurnInBackTexts)
+			TurnInBackTexts = new array<string>;
 	}
 
 	void OnSend(ScriptRPC rpc)
@@ -71,6 +92,10 @@ class DialogueQuestText
 		WriteList(rpc, NoQuestsTexts);
 		WriteList(rpc, NoQuestsBackTexts);
 		WriteList(rpc, NoQuestsLeaveTexts);
+		WriteList(rpc, QuestListBackTexts);
+		WriteList(rpc, OfferBackTexts);
+		WriteList(rpc, InProgressBackTexts);
+		WriteList(rpc, TurnInBackTexts);
 	}
 
 	protected void WriteList(ScriptRPC rpc, array<string> source)
@@ -93,6 +118,10 @@ class DialogueQuestText
 		if (!ReadList(ctx, NoQuestsTexts)) return false;
 		if (!ReadList(ctx, NoQuestsBackTexts)) return false;
 		if (!ReadList(ctx, NoQuestsLeaveTexts)) return false;
+		if (!ReadList(ctx, QuestListBackTexts)) return false;
+		if (!ReadList(ctx, OfferBackTexts)) return false;
+		if (!ReadList(ctx, InProgressBackTexts)) return false;
+		if (!ReadList(ctx, TurnInBackTexts)) return false;
 		return true;
 	}
 
@@ -120,7 +149,8 @@ class DialogueQuestTextFile
 	//! Bumped whenever new fields are added, so an existing file can have them
 	//! written in on the next server start without touching what is already
 	//! there. Version 1 added QuestListTexts and the NoQuests* fields.
-	static const int CURRENT_VERSION = 1;
+	//! Version 2 added the per-screen *BackTexts fields.
+	static const int CURRENT_VERSION = 2;
 	int ConfigVersion = 0;
 
 	ref array<ref DialogueQuestText> Quests;
