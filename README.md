@@ -22,13 +22,29 @@ folder.** No scripting, and no repacking for anything except voice audio.
 - Reward picker with item previews for quests that let players choose
 - Window position, size, colours and font all configurable per server
 - Optional voice lines, with a talking animation on AI NPCs
+- Talk to Expansion AI you spawn through the mod's own patrol file — each
+  patrol carries an ID, so dialogue locks onto the exact unit (two guards in
+  one patrol can say different things)
+- Recruit AI into your group through dialogue, gated by Expansion's own
+  recruit settings and optionally by quest progress
+- Make AI turn hostile from a dialogue choice, with a calm-down system
+  (death / weapon away / hands up / leave the area) and optional permanent
+  grudges, tunable per patrol
+- Define up to 32 of your own AI factions — name, loadout, stance toward
+  players, and who they will and won't fight — and assign them to patrols
+- A persistent, cross-NPC reputation / variable system: choices change numbers
+  that follow the player everywhere, gate individual responses, or swap in a
+  whole different conversation; each character can track its own reputation and
+  show the player's standing in the window
+- Multiple conversation trees per NPC, each unlocked by a completed quest
+- Per-response use limits, so players can't farm reputation by spamming a choice
 
 Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https://github.com/ABTT-ESK/DayZ-DialogueFramework-Release)
 
 ## Requirements
 
 - [DayZ Expansion](https://github.com/salutesh/DayZ-Expansion-Scripts)
-  (Core + Quests)
+  (Core + Quests + AI)
 - Community Framework (CF)
 
 ## Installation
@@ -69,6 +85,7 @@ Everything lives in your server profile folder:
 ```
 $profile:\DialogFramework\
   MenuConfig.json              # Window position, size, colours, font
+  AISettings.json              # AI calm-down / permanent-hostility defaults
   Dialogues\
     README.txt                 # Field reference, written for you
     LoadLog.txt                # What loaded, and what was wrong with it
@@ -78,7 +95,14 @@ $profile:\DialogFramework\
     Shared\*.json              # Trees shared by several NPCs
   QuestText\
     Example.json               # Per-quest button wording
+  AIPatrol\
+    AIPatrols.json             # Talkable AI patrols (with dialogue IDs)
+  Factions\
+    Factions.json              # Your custom AI factions
+  PlayerState\                 # Per-player reputation / variables (auto)
 ```
+
+`AISettings.json`, `AIPatrol\` and `Factions\` require the Expansion AI module.
 
 **Check `LoadLog.txt` after every restart.** It reports duplicate node IDs,
 missing root nodes and broken links. A bad file never stops the server — that
@@ -163,9 +187,7 @@ implements it independently and does not require it.
 
 ## Repacking
 
-**Repacking into a server mod pack is allowed.** DayZ servers routinely run
-dozens of mods and there are real limits on load time and client-side mod
-count, so consolidating is normal practice rather than an edge case.
+**Repacking into a server mod pack is allowed.**
 
 Please:
 

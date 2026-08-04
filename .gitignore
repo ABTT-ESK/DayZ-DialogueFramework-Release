@@ -3,6 +3,7 @@
 *.pbo.bak
 release/
 build/
+tools/
 
 # Signing keys — NEVER commit private keys
 Keys/*.bikey

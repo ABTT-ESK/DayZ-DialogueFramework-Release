@@ -1,0 +1,43 @@
+{
+    "ID": 8202,
+    "NPCIDs": [],
+    "AIPatrolID": 2,
+    "AIPatrolSubID": 1,
+    "RootNodeID": 1,
+    "GreetingVoiceLineIDs": [],
+    "FarewellVoiceLineIDs": [],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "Name's Kolar. First unit, southern patrol. You need something or you just lost?",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "Who's your partner?", "NextNodeID": 2, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "How's the patrol?", "NextNodeID": 3, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Come with me, Kolar.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "RECRUIT_AI" },
+                { "Text": "Lost. Leaving now.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "That miserable lump? Don't mind him. Talks even less than the infected.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "How's the patrol?", "NextNodeID": 3, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Right. Later.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        },
+        {
+            "ID": 3,
+            "Type": "STANDARD",
+            "SpeakerText": "Long and boring, the way I like it. Keep it that way and we'll get along.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "Who's your partner?", "NextNodeID": 2, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Take care, Kolar.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        }
+    ]
+}

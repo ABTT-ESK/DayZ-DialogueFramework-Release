@@ -1,0 +1,22 @@
+{
+    "Factions": [
+        {
+            "Name": "Townsfolk",
+            "Loadout": "",
+            "PlayerStance": "FRIENDLY",
+            "FriendlyFactions": ["Guards", "Merchants"]
+        },
+        {
+            "Name": "Merchants",
+            "Loadout": "",
+            "PlayerStance": "GUARD",
+            "FriendlyFactions": ["Guards", "Townsfolk"]
+        },
+        {
+            "Name": "Bandits",
+            "Loadout": "",
+            "PlayerStance": "HOSTILE",
+            "FriendlyFactions": ["Raiders"]
+        }
+    ]
+}

@@ -1,0 +1,34 @@
+{
+    "ID": 8203,
+    "NPCIDs": [],
+    "AIPatrolID": 2,
+    "AIPatrolSubID": 2,
+    "RootNodeID": 1,
+    "GreetingVoiceLineIDs": [],
+    "FarewellVoiceLineIDs": [],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "...What.",
+            "VoiceLineIDs": [],
+            "SpeakerLines": [
+                { "Text": "You're still here.", "RequiredQuestID": -1, "OverrideQuestID": -1, "VoiceLineIDs": [] }
+            ],
+            "Responses": [
+                { "Text": "Not much of a talker, are you?", "NextNodeID": 2, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Come with me.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "RECRUIT_AI" },
+                { "Text": "...Right. Bye.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "Kolar talks enough for both of us. Someone has to actually watch the tree line.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "Fair enough.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        }
+    ]
+}

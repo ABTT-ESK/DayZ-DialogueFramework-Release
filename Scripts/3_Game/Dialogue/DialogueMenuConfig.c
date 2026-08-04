@@ -41,10 +41,6 @@ class DialogueMenuConfig
 
 	string FontStyle = "DEFAULT";
 
-	//! Small hint icon on the right of each response button: an exit sign for
-	//! anything that closes the menu, a cart for opening the market, a speech
-	//! bubble for anything that keeps the conversation going. Off by default
-	//! so existing servers look exactly as they did.
 	bool ShowResponseIcons = false;
 
 	string LayoutOverride = "";
@@ -164,7 +160,6 @@ class DialogueMenuConfig
 		return true;
 	}
 
-	//! Suffix appended to every built-in layout filename for this style.
 	string GetLayoutSuffix()
 	{
 		if (FontStyle == "LIGHT")

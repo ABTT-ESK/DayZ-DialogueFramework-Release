@@ -8,23 +8,10 @@ class DialogueQuestText
 	ref array<string> NotYetTexts;
 	ref array<string> InProgressTexts;
 
-	//! Spoken above this NPC's quest list once this quest is completed and it
-	//! is the furthest of theirs the player has finished. One picked at random.
 	ref array<string> QuestListTexts;
-
-	//! Shown when this NPC has nothing available AND this is the furthest quest
-	//! of theirs the player has completed. One line picked at random.
 	ref array<string> NoQuestsTexts;
-
-	//! Buttons offered alongside NoQuestsTexts. Every entry is its own button.
-	//! Back returns to the tree's RootNodeID, Leave ends the conversation.
 	ref array<string> NoQuestsBackTexts;
 	ref array<string> NoQuestsLeaveTexts;
-
-	//! Per-screen "back to the conversation" buttons, overriding this quest's
-	//! NPC's Quest talk defaults for the screens this quest drives. Empty falls
-	//! back to the tree, then to the mod default. NoQuestsBackTexts above still
-	//! serves the no-quests screen.
 	ref array<string> QuestListBackTexts;
 	ref array<string> OfferBackTexts;
 	ref array<string> InProgressBackTexts;
@@ -146,10 +133,6 @@ class DialogueQuestText
 
 class DialogueQuestTextFile
 {
-	//! Bumped whenever new fields are added, so an existing file can have them
-	//! written in on the next server start without touching what is already
-	//! there. Version 1 added QuestListTexts and the NoQuests* fields.
-	//! Version 2 added the per-screen *BackTexts fields.
 	static const int CURRENT_VERSION = 2;
 	int ConfigVersion = 0;
 
@@ -172,10 +155,6 @@ class DialogueQuestTextFile
 		}
 	}
 
-	//! Returns true when the file on disk is behind and should be rewritten.
-	//! Nothing is changed here beyond the version stamp -- Sanitize() has
-	//! already filled every missing field with its default, and every value
-	//! the owner wrote was loaded before this runs.
 	bool UpgradeFromOlderVersion()
 	{
 		if (ConfigVersion >= CURRENT_VERSION)

@@ -76,6 +76,10 @@ in it doesn't work) until you fix it.
 | `NoQuestsBackTexts` | string array | Buttons shown with it that return to `RootNodeID`. Every entry is its own button |
 | `NoQuestsLeaveTexts` | string array | Buttons shown with it that end the conversation |
 | `NoQuestsVoiceLineIDs` | string array | One picked at random on the no-quests step |
+| `QuestListBackTexts` `OfferBackTexts` `InProgressBackTexts` `TurnInBackTexts` | string array | Back-to-conversation buttons for each quest screen. Empty = no button. Per-quest values in `QuestText\*.json` override these |
+| `Stages` | stage array | Quest-locked alternate trees — see [Quest-locked trees](#quest-locked-trees) |
+| `AIPatrolID` | int | Attaches this tree to Expansion AI you spawn through the mod's own patrol file — see [Talking to friendly AI](#talking-to-friendly-ai). `0` = not an AI tree |
+| `AIPatrolSubID` | int | `0` = any unit in that patrol; a number = one specific unit |
 | `Nodes` | node array | The actual conversation content — see below |
 
 ## `DialogueNode` fields
@@ -86,6 +90,7 @@ in it doesn't work) until you fix it.
 | `Type` | string | Almost always `"STANDARD"` — see [Node types](#node-types) below |
 | `SpeakerText` | string | The line shown for this node |
 | `VoiceLineIDs` | string array | One picked at random when this node is shown |
+| `SpeakerLines` | line array | Optional extra candidate lines — see [Multiple lines per node](#multiple-lines-per-node). Empty = only `SpeakerText` is used |
 | `Responses` | response array | The player's options at this node |
 
 > **Write every response field explicitly.** Leaving a field out doesn't
@@ -102,6 +107,7 @@ in it doesn't work) until you fix it.
 | `NextNodeID` | int | Which node to go to next. Only used when `ActionType` is `"NONE"` (or omitted). `-1` (or omitted) ends the conversation |
 | `RequiredQuestID` | int | Optional gating — only show this response if that quest ID is `COMPLETED` for the player. `-1` (default) = no gating |
 | `ActionType` | string | See [Action types](#action-types) below |
+| `MaxUses` | int | Anti-farm: max times a player may pick this option, ever. `0` (default) = unlimited. After the limit the option disappears — stops reputation-farming by spamming the same choice. In DialogueForge, just set the number; it manages the counter for you |
 
 ## Locking dialogue behind quests
 
@@ -119,13 +125,171 @@ no greyed-out button, no hint that it's there.
 
 Notes worth knowing:
 
-- Gating is checked **before** random pooling, so a gated response in a
-  it simply doesn't appear.
+- Gating is checked **before** the response is shown, so a gated response
+  simply doesn't appear until its quest is complete.
 - Only `COMPLETED` unlocks. A quest that's merely accepted or turned in but
   not finished still hides the response.
 - If gating hides *every* response on a node, the player gets a line of
   dialogue with no buttons and only the X to escape. Always leave at least
   one ungated response on any node that can be reached.
+
+## Multiple lines per node
+
+A node can carry extra candidate lines in `SpeakerLines` so a greeting varies
+visit to visit, or a line only appears once a quest is done. When present, the
+mod picks one at random from `SpeakerText` plus whichever `SpeakerLines` the
+player qualifies for.
+
+```json
+{
+  "ID": 1,
+  "SpeakerText": "Well, look who wandered in.",
+  "SpeakerLines": [
+    { "Text": "Back again?", "RequiredQuestID": -1, "OverrideQuestID": -1, "VoiceLineIDs": [] },
+    { "Text": "The hero returns. Didn't think you'd make it.", "RequiredQuestID": 42, "OverrideQuestID": -1, "VoiceLineIDs": [] }
+  ],
+  "Responses": [ ... ]
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `Text` | string | The candidate line |
+| `RequiredQuestID` | int | `-1` = always in the random pool. Otherwise the line joins the pool only once that quest is `COMPLETED` |
+| `OverrideQuestID` | int | `-1` = normal random line. Otherwise, once that quest is `COMPLETED`, this line stops being random and becomes the NPC's fixed greeting (highest qualifying `OverrideQuestID` wins) |
+| `VoiceLineIDs` | string array | Optional audio for this specific line, one picked at random |
+
+`RequiredQuestID` and `OverrideQuestID` are independent — a line can be a random
+extra, a locked reveal, a permanent post-quest greeting, or a combination.
+
+## Quest-locked trees
+
+A tree can carry any number of `Stages`, each a **complete tree of its own** —
+its own nodes, its own root, its own greeting and branches. Once the player has
+`COMPLETED` a stage's `RequiredQuestID`, that stage replaces the base tree for
+them. The highest completed stage wins; with none completed, the base tree runs.
+
+```json
+{
+  "ID": 1,
+  "RootNodeID": 1,
+  "Stages": [
+    {
+      "RequiredQuestID": 42,
+      "RootNodeID": 1,
+      "Nodes": [
+        { "ID": 1, "Type": "STANDARD", "SpeakerText": "Different story now that the wall's up.", "Responses": [ ... ] }
+      ]
+    }
+  ],
+  "Nodes": [ ... ]
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `RequiredQuestID` | int | The quest that unlocks this stage when `COMPLETED` |
+| `RootNodeID` | int | First node shown, numbered within this stage |
+| `Nodes` | node array | This stage's conversation, fully independent of the base tree and other stages |
+
+Because each stage is a clean tree, node IDs restart per stage and a veteran's
+options only show what's relevant to their point in the story. An empty `Stages`
+array behaves exactly as a single base tree.
+
+## Dialogue variables (attitude / mood / flags)
+
+Variables are **per-player numbers that persist and are shared across every
+NPC**. A choice can change one, and any NPC — this one or another — can react to
+it. Use them for reputation, mood, "sided with the bandits" flags, anything.
+
+They're stored server-side per player (`$profile\DialogFramework\PlayerState\`),
+so they survive relogs and carry between characters in the story sense.
+
+A variable op is `{ "Name": "...", "Op": "...", "Value": N }`.
+
+**Set a variable when an option is chosen** — put `SetVars` on a response:
+
+```json
+{ "Text": "You can count on me.", "NextNodeID": 5, "ActionType": "NONE",
+  "SetVars": [ { "Name": "rep_hana", "Op": "INCREASE", "Value": 1 } ] }
+```
+`Op` for setting: `INCREASE`, `DECREASE`, `SET` (assign an exact value).
+
+**Show an option only if variables match** — put `RequiredVars` on a response
+(works alongside `RequiredQuestID`). Also works on a `SpeakerLines` greeting, so
+an NPC opens differently by mood:
+
+```json
+{ "Text": "[She trusts you] Take the back road, it's clear.", "NextNodeID": 8,
+  "ActionType": "NONE",
+  "RequiredVars": [ { "Name": "rep_hana", "Op": "AT_LEAST", "Value": 3 } ] }
+```
+`Op` for conditions: `AT_LEAST`, `AT_MOST`, `MORE_THAN`, `BELOW`, `EQUALS`,
+`NOT_EQUAL`. All conditions in the list must pass. An unset variable reads
+as `0`.
+
+### Two ways an NPC can react
+
+- **Inline** — gate individual responses and greeting lines (above). The
+  conversation stays one tree; options appear and disappear by variable.
+- **Whole separate tree** — a `Stage` can be selected by variables instead of a
+  quest. Give the stage `RequiredVars` (and a `Priority`); when it matches, that
+  entire tree replaces the base one, exactly like the quest-locked stages:
+
+```json
+"Stages": [
+  { "RequiredVars": [ { "Name": "rep_hana", "Op": "AT_MOST", "Value": -3 } ],
+    "Priority": 10, "RootNodeID": 1, "Nodes": [ ... ] }
+]
+```
+Among matching stages the highest `Priority` wins (quest-locked stages default
+to Priority 0, so existing behaviour is unchanged). A whole-tree swap takes
+effect the **next** time the conversation opens; inline gating updates
+immediately as you talk.
+
+Notes:
+
+- Variable **sets are applied server-side** and saved. On a story/PvE server
+  this is the right tradeoff; it isn't hardened against a player editing their
+  own client scripts to bump a value.
+- Because variables are global per player, a choice with one NPC changes what
+  **every** NPC will say — that's how characters "intersect."
+
+> The `Op` codes above are only needed if you hand-edit JSON. **In DialogueForge
+> you never see them** — a response has a *Reputation & story flags* section
+> where you pick "Increase by / Decrease by / Set to" and "is at least / is more
+> than / …" from dropdowns.
+
+### Per-character reputation and the in-game marker
+
+A single shared reputation gets awkward — a player might be trusted by a quest
+giver but on thin ice with a trader. Give **each character its own reputation**
+by pointing its tree at its own variable with `ReputationVar`:
+
+```json
+{ "ID": 1, "NPCIDs": [], "ReputationVar": "rep_hana",
+  "ReputationTiers": [
+    { "Threshold": -3, "Label": "Hostile" },
+    { "Threshold": 0,  "Label": "Wary" },
+    { "Threshold": 3,  "Label": "Friendly" },
+    { "Threshold": 6,  "Label": "Trusted" }
+  ],
+  "RootNodeID": 1, "Nodes": [ ... ] }
+```
+
+Because each character's tree names a different variable, their reputations are
+independent — `rep_hana` and `rep_weapons` move separately, and each character's
+options and greetings gate on their own.
+
+When `ReputationVar` is set, the **dialogue window shows where the player stands**
+next to the speaker's name — the matching tier `Label` (highest `Threshold` at or
+below the current value), or the raw number if you set no tiers. It updates as
+choices change the value during the conversation.
+
+Change it like any variable — a response `SetVars` on `rep_hana`. In
+DialogueForge, set the reputation name and tiers on the *Who it's for* tab, and
+use the **"+ change this character's reputation"** / **"+ require this
+character's reputation"** buttons on a response to fill it in for you.
 
 ## Per-quest wording
 
@@ -250,6 +414,101 @@ Traders with no match open the market directly, exactly as before.
 Quest responses (`SHOW_QUEST_LIST` and the rest) don't apply to traders and
 are ignored there.
 
+## Talking to friendly AI
+
+> Requires the **Expansion AI** module. Dialogue Framework lists it as a
+> required addon.
+
+Regular AI have no fixed ID like a quest NPC, and enemy factions shoot on
+sight — so talkable AI are ones **you spawn through the mod** and tag with an
+ID. Walk up to a tagged AI and a **Talk** action opens the dialogue window.
+The AI halts while you talk and resumes its patrol when the window closes.
+
+A response can also carry `"ActionType": "GO_HOSTILE"` — the AI's whole patrol
+turns on the player and attacks. Handy for a neutral encounter that can go
+wrong.
+
+### Spawning talkable patrols
+
+Put an `AIPatrols.json` in `$profile\DialogFramework\AIPatrol\`. It uses the
+**same per-patrol format as Expansion's `AIPatrolSettings.json`**, wrapped in
+`{ "Patrols": [ ... ] }`, with one extra field per patrol: `"DialogueID"`. The
+mod spawns those patrols itself and stamps every unit with that `DialogueID`
+plus a sub-ID (`1..N`, in spawn order).
+
+```jsonc
+{
+  "Patrols": [
+    {
+      "DialogueID": 1,          // <<<<< your ID for this patrol; a tree's AIPatrolID matches it
+      "Persist": 0,             // <<<<< recommended, so IDs reassign cleanly each restart
+      "Faction": "Guards",      // <<<<< an Expansion faction, or one of your own from Factions\Factions.json
+      "Loadout": "ChernoGuardsLoadout",
+      "NumberOfAI": 2,
+      "Behaviour": "LOOP",
+      "Speed": "WALK",
+      "Chance": 1.0,
+      "PersistentAggroThreshold": -1, // <<<<< per-patrol override of AISettings. -1 = use global, 0 = this patrol never goes permanently hostile, N = permanent after N times
+      "PersistenceMode": "",          // <<<<< per-patrol override: "" = use global, or FACTION / PATROL / BOTH
+      "Waypoints": [ [6493.68, 18.31, 2236.15], [6488.95, 18.31, 2238.59] ]
+      // ...all the other normal AIPatrolSettings fields...
+    }
+  ]
+}
+```
+
+Two rules:
+
+- **Don't also list a talkable patrol in Expansion's `AIPatrolSettings.json`** —
+  it would spawn twice. The `AIPatrol\AIPatrols.json` file owns it.
+- Keep `"Persist": 0` on talkable patrols, so IDs are reassigned cleanly each
+  restart and they don't tangle with Expansion's group persistence.
+
+**Per-patrol permanent-hostility.** `AISettings.json` sets the server default,
+but each patrol can override it with `PersistentAggroThreshold` and
+`PersistenceMode` — so one patrol turns permanently hostile after 2 bad runs,
+another after 6, and another (`0`) never does. Leave them at `-1` / `""` to use
+the global setting.
+
+### Attaching a tree
+
+A dialogue tree locks onto tagged AI with:
+
+| Field | Meaning |
+|---|---|
+| `AIPatrolID` | Matches any unit spawned from the patrol with this `DialogueID` |
+| `AIPatrolSubID` | `0` = any unit in that patrol; a number = only that one unit (unit 1, unit 2, …) |
+
+```json
+{ "ID": 20, "AIPatrolID": 1, "AIPatrolSubID": 0, "RootNodeID": 1, "Nodes": [ ... ] }
+```
+
+So two units in the same patrol can hold entirely different conversations —
+give one tree `AIPatrolSubID: 1` and another `AIPatrolSubID: 2`. The tree file
+can live in any folder; matching is by `AIPatrolID`, not the folder name.
+
+In **DialogueForge**, pick **"Talkable AI (Expansion)"** on the Dialogue tab and
+set the Patrol DialogueID (and optional Sub-ID); it saves to `Dialogues\AI\`.
+The `RECRUIT_AI` and `GO_HOSTILE` actions are in the response action dropdown.
+
+### Recruiting through dialogue
+
+A response with `"ActionType": "RECRUIT_AI"` recruits the AI into the player's
+group, then closes the window. Recruiting is validated **server-side** and
+respects Expansion's own AI settings — `CanRecruitFriendly`, `CanRecruitGuards`
+and `MaxRecruitableAI` — so it behaves like the stock recruit action and can't
+exceed a server's limits.
+
+To lock recruiting behind quest progress, set a `RequiredQuestID` on the
+`RECRUIT_AI` response. That hides the option until the quest is `COMPLETED`
+(like any gated response) **and** is re-checked on the server before the
+recruit goes through.
+
+```json
+{ "Text": "Watch my back out there.", "NextNodeID": -1,
+  "RequiredQuestID": 12, "ActionType": "RECRUIT_AI" }
+```
+
 ## Action types
 
 | Value | What it does |
@@ -260,6 +519,9 @@ are ignored there.
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
 | `"TURN_IN_QUEST"` | Only meaningful when the quest-detail step is showing a quest that's ready to turn in — completes it |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes the window |
+| `"OPEN_TRADER"` | Trader trees only. Closes dialogue and opens the market |
+| `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. See [Talking to friendly AI](#talking-to-friendly-ai) |
+| `"GO_HOSTILE"` | AI trees only. The AI's whole patrol turns hostile and attacks the player, then closes. For conversations that can go sideways |
 
 ## Node types
 
@@ -358,7 +620,7 @@ reported so you can fix them, and the affected branch just won't be
 reachable until you do.
 
 **Practical tip:** if you're building something large, keep each node's
-`Responses` list reasonably short (roughly 2–6 visible at once, using
-even if you've authored a dozen options). The system will happily render
+`Responses` list reasonably short (roughly 2–6 visible at once), even if
+you've authored a dozen options. The system will happily render
 more, but a wall of buttons is a UX problem for the player, not a
 technical one.

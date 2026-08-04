@@ -17,25 +17,16 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected ref array<ExpansionQuestConfig> m_CurrentQuests;
 	protected bool m_ShowingQuestList;
 
-	//! Synthetic node for the "no quests available" step. Held as a member so
-	//! it stays alive while it is the active node.
 	protected ref DialogueNode m_NoQuestsNode;
 	protected static const int NO_QUESTS_NODE_ID = -1000;
 
 	protected static const string ICON_FOLDER = "DialogueFramework/GUI/images/";
 
-	//! .edds is the standard UI texture format for DayZ; .paa also loads.
-	//! Change this and the files in GUI/images together.
 	protected static const string ICON_EXT = ".paa";
-	//! The _ca suffix is not decoration. Bohemia's texture tools pick the
-	//! output format from the FILE NAME -- _co means no alpha, _ca means keep
-	//! the alpha channel. Without it the icons convert to opaque textures and
-	//! render as solid blocks.
 	protected static const string ICON_EXIT = "icon_exit_ca";
 	protected static const string ICON_CHAT = "icon_chat_ca";
 	protected static const string ICON_CART = "icon_cart_ca";
 
-	//! One diagnostic line per window rather than one per button
 	protected bool m_IconDiagLogged;
 
 	protected ref array<ExpansionQuestRewardConfig> m_CurrentRewards;
@@ -48,8 +39,6 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected Widget m_DialoguePanel;
 	protected ScrollWidget m_ResponseScroll;
 
-	//! The spoken line scrolls, so a long line is readable on a short panel
-	//! instead of being cut off mid-sentence.
 	protected ScrollWidget m_SpeakerLineScroll;
 	protected Widget m_ConfirmPanel;
 	protected RichTextWidget m_ConfirmText;
@@ -64,7 +53,6 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected Widget m_RequiredStrip;
 	protected Widget m_RequiredStripLabel;
 
-	//! Tiles per group, so each group can be sized and centred on its own.
 	protected ref array<Widget> m_RequiredTiles;
 	protected ref array<Widget> m_RewardTiles;
 
@@ -73,59 +61,34 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected float m_ScrollW;
 	protected float m_ScrollH;
 
-	//! Tile size as authored in dialogue_reward_display.layout. The strip is
-	//! laid out from these in pixels, so a server owner shrinking the window
-	//! scales the tiles instead of cropping them.
-	//! A wide, short row: picture on the left, name and amount beside it. The
-	//! panel is wide and shallow, so stacking the name under the picture put
-	//! the text in the one direction there was no room in.
 	protected static const float TILE_WIDTH = 300;
 	protected static const float TILE_HEIGHT = 72;
 	protected static const float TILE_MARGIN = 4;
 
-	//! Most of the panel the item strip may ever take. Past this the tiles
-	//! shrink rather than eating the response list.
 	protected static const float STRIP_MAX_FRACTION = 0.30;
 
-	//! Never squeeze the response list below this much of the panel.
 	protected static const float RESPONSE_MIN_FRACTION = 0.28;
 
-	//! Where the item area starts, just under the speaker's line, and the most
-	//! of the panel it may take.
 	protected static const float ITEM_AREA_TOP = 0.28;
 	protected static const float ITEM_AREA_MAX_FRACTION = 0.34;
 
-	//! Height of a group heading, as a fraction of the panel.
 	protected static const float GROUP_LABEL_FRACTION = 0.06;
 
-	//! Tiles may grow past their authored size when there is room, so a single
-	//! preview is not left tiny in the middle of an empty panel.
 	protected static const float TILE_MAX_SCALE = 1.5;
 	protected static const float TILE_MIN_SCALE = 0.8;
 
-	//! Matches "exact text size" on SpeakerLine in the layout. Change both.
 	protected static const float SPEAKER_FONT_PX = 18;
 
-	//! Average glyph width as a fraction of font size, and line pitch.
 	protected static const float SPEAKER_CHAR_RATIO = 0.5;
 	protected static const float SPEAKER_LINE_SPACING = 1.35;
 
-	//! Longest item name a tile shows before trimming.
 	protected static const int TILE_NAME_MAX = 46;
 
-	//! Which kinds of item ended up on the strip, so its heading can tell the
-	//! truth rather than always claiming "Reward".
 	protected bool m_StripHasGiven;
 	protected bool m_StripHasNeeded;
 	protected bool m_StripHasReward;
 	protected int m_SelectedRewardIndex = -1;
 
-	//! Objective-item ("hand in any one of these") selection state. Expansion's
-	//! server rejects a turn-in with objItemIndex -1 when a collection objective
-	//! has NeedAnyCollection set (see ExpansionQuestObjectiveCollectionEventBase
-	//! CleanupObjectiveItems), so the framework has to resolve a real collection
-	//! index before turning in -- auto-picking when there is only one valid
-	//! choice and offering a picker when there is more than one.
 	protected bool m_ShowingObjItemList;
 	protected int m_SelectedObjItemIndex = -1;
 	protected ref array<ref ExpansionQuestObjectiveDelivery> m_ObjItemChoices;
@@ -136,6 +99,7 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected ExpansionNPCBase m_TalkingNPC;
 #ifdef EXPANSIONMODAI
 	protected eAIBase m_TalkingNPCAI;
+	protected eAIBase m_TargetAI;
 #endif
 
 	void DialogueWindowMenu(DialogueTree tree, int npcID, string npcName)
@@ -154,6 +118,13 @@ class DialogueWindowMenu : UIScriptedMenu
 		m_ObjItemChoices = new array<ref ExpansionQuestObjectiveDelivery>;
 		m_ObjItemChoiceIndices = new array<int>;
 	}
+
+#ifdef EXPANSIONMODAI
+	void DialogueFW_SetTargetAI(eAIBase ai)
+	{
+		m_TargetAI = ai;
+	}
+#endif
 
 	override Widget Init()
 	{
@@ -315,7 +286,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!m_ActiveTree)
 			return;
 
-		DialogueNode root = FindNode(m_ActiveTree, m_ActiveTree.RootNodeID);
+		DialogueNode root = FindStageNode(GetEffectiveRootNodeID());
 		RenderNode(root);
 
 		Print("[DialogueFramework] [DIAG] OpenRootNode() completed -- buttons created=" + m_ResponseButtons.Count());
@@ -327,12 +298,118 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] OpenRootNode() greeting voice attempted, done.");
 	}
 
-	protected DialogueNode FindNode(DialogueTree tree, int nodeID)
+	protected bool m_StageResolved;
+	protected ref array<ref DialogueNode> m_StageNodes;
+	protected int m_StageRootNodeID = 1;
+
+	protected void ResolveStage()
 	{
-		if (!tree || !tree.Nodes)
+		if (m_StageResolved)
+			return;
+		m_StageResolved = true;
+
+		if (!m_ActiveTree)
+			return;
+
+		m_StageNodes = m_ActiveTree.Nodes;
+		m_StageRootNodeID = m_ActiveTree.RootNodeID;
+
+		if (!m_ActiveTree.Stages || m_ActiveTree.Stages.Count() == 0)
+			return;
+
+		ExpansionQuestPersistentData questData = ExpansionQuestModule.GetModuleInstance().GetClientQuestData();
+
+		DialogueTreeStage best = null;
+		int bestPriority = 0;
+		int bestQuestID = -1;
+
+		foreach (DialogueTreeStage stage : m_ActiveTree.Stages)
+		{
+			if (!stage || !stage.Nodes || stage.Nodes.Count() == 0)
+				continue;
+
+			bool hasQuestReq = stage.RequiredQuestID > 0;
+			bool hasVarReq = stage.RequiredVars && stage.RequiredVars.Count() > 0;
+			if (!hasQuestReq && !hasVarReq)
+				continue;
+
+			if (hasQuestReq)
+			{
+				if (!questData)
+					continue;
+				if (questData.GetQuestStateByQuestID(stage.RequiredQuestID) != ExpansionQuestState.COMPLETED)
+					continue;
+			}
+
+			if (hasVarReq && !VarGatePasses(stage.RequiredVars))
+				continue;
+
+			bool better = false;
+			if (!best)
+				better = true;
+			else if (stage.Priority > bestPriority)
+				better = true;
+			else if (stage.Priority == bestPriority && stage.RequiredQuestID > bestQuestID)
+				better = true;
+
+			if (better)
+			{
+				best = stage;
+				bestPriority = stage.Priority;
+				bestQuestID = stage.RequiredQuestID;
+			}
+		}
+
+		if (best)
+		{
+			m_StageNodes = best.Nodes;
+			m_StageRootNodeID = best.RootNodeID;
+		}
+
+		Print("[DialogueFramework] [DIAG] Active tree resolved -- stage priority=" + bestPriority + " quest=" + bestQuestID + " root=" + m_StageRootNodeID);
+	}
+
+	protected int GetEffectiveRootNodeID()
+	{
+		ResolveStage();
+		return m_StageRootNodeID;
+	}
+
+	protected void ApplySpeakerName()
+	{
+		if (!m_SpeakerName)
+			return;
+
+		string display = m_NPCName;
+		string rep = GetReputationDisplay();
+		if (rep != "")
+			display = display + "   -   " + rep;
+
+		m_SpeakerName.SetText(display);
+	}
+
+	protected string GetReputationDisplay()
+	{
+		if (!m_ActiveTree || m_ActiveTree.ReputationVar == "")
+			return "";
+
+		int value = DialogueVars.GetInstance().GetClientState().Get(m_ActiveTree.ReputationVar);
+
+		string label = DialogueRepTierList.LabelFor(m_ActiveTree.ReputationTiers, value);
+		if (label != "")
+			return label;
+
+		return "Reputation: " + value;
+	}
+
+	protected DialogueNode FindStageNode(int nodeID)
+	{
+		ResolveStage();
+
+		if (!m_StageNodes)
 			return null;
 
-		foreach (DialogueNode node : tree.Nodes)
+		foreach (DialogueNode node : m_StageNodes)
 		{
 			if (node && node.ID == nodeID)
 				return node;
@@ -367,7 +444,6 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		array<ref DialogueResponse> visible = GetVisibleResponses(node);
 
-		//! Resolve which line (and matching voice pool) this node speaks.
 		string spokenText = node.SpeakerText;
 		array<string> spokenVoicePool = node.VoiceLineIDs;
 		DialogueSpeakerLine chosenLine = PickSpeakerLine(node);
@@ -379,7 +455,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 
 		if (m_SpeakerName)
-			m_SpeakerName.SetText(m_NPCName);
+			ApplySpeakerName();
 		if (m_SpeakerLine)
 			SetSpeakerLine(spokenText);
 
@@ -416,11 +492,19 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected bool PassesGating(DialogueResponse response)
 	{
-		return QuestGatePasses(response.RequiredQuestID);
+		if (!QuestGatePasses(response.RequiredQuestID))
+			return false;
+		if (!VarGatePasses(response.RequiredVars))
+			return false;
+		if (response.MaxUses > 0 && response.UsesKey != "")
+		{
+			int used = DialogueVars.GetInstance().GetClientState().Get(response.UsesKey);
+			if (used >= response.MaxUses)
+				return false;
+		}
+		return true;
 	}
 
-	//! Shared quest-completion gate, used by both response visibility and the
-	//! per-line speaker gating. A quest ID <= 0 is an open gate.
 	protected bool QuestGatePasses(int requiredQuestID)
 	{
 		if (requiredQuestID <= 0)
@@ -433,20 +517,16 @@ class DialogueWindowMenu : UIScriptedMenu
 		return questData.GetQuestStateByQuestID(requiredQuestID) == ExpansionQuestState.COMPLETED;
 	}
 
-	//! Chooses which line the node speaks. With SpeakerLines set, one is drawn
-	//! at random from those the player qualifies for, plus the base SpeakerText
-	//! when it has text - so a node with both varies across all of them.
-	//! Returns null to mean "use the node's own SpeakerText / VoiceLineIDs",
-	//! which also covers the case where every extra line is locked away.
+	protected bool VarGatePasses(array<ref DialogueVarOp> conditions)
+	{
+		return DialogueVarOpList.Evaluate(conditions, DialogueVars.GetInstance().GetClientState());
+	}
+
 	protected DialogueSpeakerLine PickSpeakerLine(DialogueNode node)
 	{
 		if (!node.SpeakerLines || node.SpeakerLines.Count() == 0)
 			return null;
 
-		//! Override wins over the random pool: a line whose override quest is
-		//! completed becomes the fixed greeting. Highest override quest ID wins
-		//! when more than one qualifies, so it reads as "furthest along". A
-		//! line's own lock still has to pass for its override to apply.
 		DialogueSpeakerLine overrideLine = null;
 		int overrideBest = -1;
 		foreach (DialogueSpeakerLine candidate : node.SpeakerLines)
@@ -461,6 +541,8 @@ class DialogueWindowMenu : UIScriptedMenu
 				continue;
 			if (!QuestGatePasses(candidate.RequiredQuestID))
 				continue;
+			if (!VarGatePasses(candidate.RequiredVars))
+				continue;
 
 			overrideBest = candidate.OverrideQuestID;
 			overrideLine = candidate;
@@ -472,7 +554,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		array<ref DialogueSpeakerLine> pool = new array<ref DialogueSpeakerLine>;
 		foreach (DialogueSpeakerLine line : node.SpeakerLines)
 		{
-			if (line && QuestGatePasses(line.RequiredQuestID))
+			if (line && QuestGatePasses(line.RequiredQuestID) && VarGatePasses(line.RequiredVars))
 				pool.Insert(line);
 		}
 
@@ -501,6 +583,39 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected ref DialogueResponse m_PendingResponse;
 
+	protected void ApplySetVars(DialogueResponse response)
+	{
+		bool hasSet = response.SetVars && response.SetVars.Count() > 0;
+		bool hasUses = response.MaxUses > 0 && response.UsesKey != "";
+		if (!hasSet && !hasUses)
+			return;
+
+		array<ref DialogueVarOp> ops = new array<ref DialogueVarOp>;
+		if (hasSet)
+		{
+			foreach (DialogueVarOp op : response.SetVars)
+				ops.Insert(op);
+		}
+		if (hasUses)
+		{
+			DialogueVarOp useOp = new DialogueVarOp();
+			useOp.Name = response.UsesKey;
+			useOp.Op = "INCREASE";
+			useOp.Value = 1;
+			ops.Insert(useOp);
+		}
+
+		DialogueVarOpList.Apply(ops, DialogueVars.GetInstance().GetClientState());
+
+		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+		if (!player)
+			return;
+
+		ScriptRPC rpc = new ScriptRPC();
+		DialogueVarOpList.Write(rpc, ops);
+		rpc.Send(player, DialogueFrameworkRPC.CLIENT_APPLY_VARS, true, null);
+	}
+
 	protected void ExecutePendingResponse()
 	{
 		DialogueResponse response = m_PendingResponse;
@@ -509,6 +624,8 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 
 		Print("[DialogueFramework] [DIAG] ExecutePendingResponse() actionType=" + response.ActionType);
+
+		ApplySetVars(response);
 
 		switch (response.ActionType)
 		{
@@ -543,6 +660,22 @@ class DialogueWindowMenu : UIScriptedMenu
 				TurnInActiveQuest();
 				break;
 
+			case DialogueActionType.RECRUIT_AI:
+			#ifdef EXPANSIONMODAI
+				if (m_TargetAI)
+					m_TargetAI.DialogueFW_RequestRecruitClient(response.RequiredQuestID);
+			#endif
+				EndConversation();
+				break;
+
+			case DialogueActionType.GO_HOSTILE:
+			#ifdef EXPANSIONMODAI
+				if (m_TargetAI)
+					m_TargetAI.DialogueFW_RequestHostileClient();
+			#endif
+				EndConversation();
+				break;
+
 			case DialogueActionType.NONE:
 			default:
 				if (response.NextNodeID == -1)
@@ -550,7 +683,7 @@ class DialogueWindowMenu : UIScriptedMenu
 					EndConversation();
 					return;
 				}
-				RenderNode(FindNode(m_ActiveTree, response.NextNodeID));
+				RenderNode(FindStageNode(response.NextNodeID));
 				break;
 		}
 	}
@@ -563,9 +696,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		array<ExpansionQuestConfig> validQuests = GetAvailableQuestsForNPC();
 		Print("[DialogueFramework] [DIAG] ShowLiveQuestList() got " + validQuests.Count() + " valid quests.");
 
-		//! Nothing to list. Render a real dialogue node instead of a lone dead
-		//! button -- RenderNode() clears m_ShowingQuestList, so OnClick routes
-		//! through m_CurrentResponses and the buttons actually do something.
 		if (validQuests.Count() == 0)
 		{
 			ShowNoQuestsStep();
@@ -577,7 +707,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		m_ShowingObjItemList = false;
 
 		if (m_SpeakerName)
-			m_SpeakerName.SetText(m_NPCName);
+			ApplySpeakerName();
 		if (m_SpeakerLine)
 			SetSpeakerLine(GetQuestListPrompt());
 
@@ -594,8 +724,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_ResponseButtons.Insert(CreateResponseButton(title, IsQuestOnCooldown(quest, remaining), ICON_CHAT));
 		}
 
-		//! Back-to-conversation buttons come after the quests. Their user IDs run
-		//! past m_CurrentQuests.Count(), which OnClick reads as "return to root".
 		array<string> backTexts = ResolveQuestListBackTexts();
 		if (backTexts)
 		{
@@ -604,10 +732,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 	}
 
-	//! Sets the spoken line and grows the text widget to fit it. A ScrollWidget
-	//! only scrolls when its content is TALLER than its viewport, so leaving
-	//! the text at viewport height just clips it -- the widget has to be sized
-	//! from the text.
 	protected void SetSpeakerLine(string text)
 	{
 		if (!m_SpeakerLine)
@@ -624,9 +748,6 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		if (scrollW > 0 && scrollH > 0)
 		{
-			//! Rough character width for this font. Overestimating the line
-			//! count only adds harmless blank space at the bottom;
-			//! underestimating clips the text, so lean generous.
 			float charWidth = SPEAKER_FONT_PX * SPEAKER_CHAR_RATIO;
 			float perLine = scrollW / charWidth;
 			if (perLine < 8)
@@ -640,8 +761,6 @@ class DialogueWindowMenu : UIScriptedMenu
 				lines = lines + 1;
 			}
 
-			//! One spare line, because wrapping breaks on whole words and so
-			//! uses a little more room than a straight character count.
 			lines = lines + 1;
 
 			float neededPx = lines * SPEAKER_FONT_PX * SPEAKER_LINE_SPACING;
@@ -680,10 +799,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return "What do you need done?";
 	}
 
-	//! Builds and renders the "this NPC has nothing for you" step.
-	//! Wording comes, in order of preference, from the QuestText entry of the
-	//! furthest-along quest of this NPC's that the player has completed, then
-	//! from the tree's own fallbacks, then from built-in defaults.
 	protected void ShowNoQuestsStep()
 	{
 		m_ShowingQuestList = false;
@@ -732,9 +847,7 @@ class DialogueWindowMenu : UIScriptedMenu
 				m_NoQuestsNode.VoiceLineIDs.Insert(voiceLine);
 		}
 
-		int rootID = 1;
-		if (m_ActiveTree)
-			rootID = m_ActiveTree.RootNodeID;
+		int rootID = GetEffectiveRootNodeID();
 
 		if (backTexts)
 		{
@@ -748,7 +861,6 @@ class DialogueWindowMenu : UIScriptedMenu
 				m_NoQuestsNode.Responses.Insert(BuildNoQuestsResponse(leaveText, -1, DialogueActionType.END_CONVERSATION));
 		}
 
-		//! Never leave the player with the X as their only way out.
 		if (m_NoQuestsNode.Responses.Count() == 0)
 			m_NoQuestsNode.Responses.Insert(BuildNoQuestsResponse("Back", rootID, DialogueActionType.NONE));
 
@@ -767,12 +879,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return response;
 	}
 
-	//! Each quest screen has its own "back to the conversation" wording so a
-	//! player is never stuck with the X or a quest-ending answer as their only
-	//! way out. Resolution is per-quest override -> NPC (tree) default -> none.
-
-	//! Chooses back wording: the quest's own override if it set one, otherwise
-	//! the NPC's Quest talk default, otherwise none.
 	protected array<string> ResolveBackTexts(array<string> perQuest, array<string> treeLevel)
 	{
 		if (perQuest && perQuest.Count() > 0)
@@ -788,10 +894,6 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const int BACK_SCREEN_INPROGRESS = 1;
 	protected static const int BACK_SCREEN_TURNIN = 2;
 
-	//! Back wording for a quest detail screen. questText is this quest's
-	//! override (never null here -- ShowQuestDetail defaults it); screen picks
-	//! the field. The cooldown screen renders in the offer branch, so it shares
-	//! the offer screen's wording.
 	protected array<string> ResolveDetailBackTexts(DialogueQuestText questText, int screen)
 	{
 		array<string> perQuest = null;
@@ -816,10 +918,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return ResolveBackTexts(perQuest, treeLevel);
 	}
 
-	//! Back wording for the quest list. The list is not one quest, so its
-	//! per-quest override comes from the furthest-completed quest of this NPC's
-	//! that set QuestListBackTexts -- the same "furthest along" rule the list
-	//! greeting uses -- then the NPC's Quest talk default.
 	protected array<string> ResolveQuestListBackTexts()
 	{
 		array<string> treeLevel = null;
@@ -867,8 +965,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return best;
 	}
 
-	//! Appends back-to-conversation buttons to a node, each routing to the
-	//! tree's root so the player drops back into the greeting.
 	protected void AddBackToConversationResponses(DialogueNode node, array<string> backTexts)
 	{
 		if (!node || !m_ActiveTree)
@@ -878,12 +974,9 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 
 		foreach (string backText : backTexts)
-			node.Responses.Insert(BuildNoQuestsResponse(backText, m_ActiveTree.RootNodeID, DialogueActionType.NONE));
+			node.Responses.Insert(BuildNoQuestsResponse(backText, GetEffectiveRootNodeID(), DialogueActionType.NONE));
 	}
 
-	//! Returns to the root node without replaying the greeting voice line, used
-	//! by the back-to-conversation button on the quest list. Deferred so the
-	//! buttons are not rebuilt from inside the click that triggered it.
 	protected void ReturnToRootDeferred()
 	{
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(ExecuteReturnToRoot, 0, false);
@@ -894,10 +987,9 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!m_ActiveTree)
 			return;
 
-		RenderNode(FindNode(m_ActiveTree, m_ActiveTree.RootNodeID));
+		RenderNode(FindStageNode(GetEffectiveRootNodeID()));
 	}
 
-	//! Which pool a lookup is after. Both use the same selection rule.
 	protected static const int PROGRESS_NO_QUESTS = 0;
 	protected static const int PROGRESS_QUEST_LIST = 1;
 
@@ -912,9 +1004,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return questText.NoQuestsTexts;
 	}
 
-	//! Highest-numbered quest belonging to this NPC that the player has
-	//! COMPLETED and that fills the requested pool. Highest ID wins, so a
-	//! chain reads as "furthest along" without any extra config.
 	protected DialogueQuestText FindProgressQuestText(int mode)
 	{
 		if (m_NPCID == -1)
@@ -960,8 +1049,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return best;
 	}
 
-	//! Matches on giver OR turn-in, so a quest handed in here counts even when
-	//! it was given out somewhere else.
 	protected bool QuestBelongsToThisNPC(ExpansionQuestConfig questConfig)
 	{
 		if (!questConfig)
@@ -1240,9 +1327,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (suffix == "reward")
 			m_StripHasReward = true;
 
-		//! Rewards and requirements are separate groups with separate
-		//! headings -- lumping them together told players a splint they had to
-		//! find was a payout.
 		Widget parentStrip = m_RequiredStrip;
 		if (suffix == "reward")
 			parentStrip = m_RewardStrip;
@@ -1289,8 +1373,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_RequiredTiles.Insert(tile);
 	}
 
-	//! Counted in a loop rather than divided: EnforceScript float-to-int
-	//! conversion is exactly the kind of detail that silently costs a build.
 	protected int TilesPerRow(float tileW, float rowPx, int count)
 	{
 		float slotW = tileW + TILE_MARGIN * 2;
@@ -1332,9 +1414,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return rows;
 	}
 
-	//! The non-reward group can hold items the quest wants from you and items
-	//! it hands you at the start. Those are not the same thing, so the heading
-	//! says which it actually is.
 	protected void ApplyRequiredHeading()
 	{
 		if (!m_RequiredStripLabel)
@@ -1353,10 +1432,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		heading.SetText(text);
 	}
 
-	//! Lays the two item groups out SIDE BY SIDE -- required on the left,
-	//! reward on the right -- so each gets the full height of the item area
-	//! and the tiles can be as large as the space allows. Stacking them
-	//! vertically wasted the panel's width and forced the previews tiny.
 	protected void LayoutItemGroups()
 	{
 		if (!m_DialoguePanel)
@@ -1366,8 +1441,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		float panelH;
 		m_DialoguePanel.GetScreenSize(panelW, panelH);
 
-		//! Measurement is empty before the first frame. Leave the authored
-		//! layout alone rather than writing nonsense into it.
 		if (panelW <= 0 || panelH <= 0)
 		{
 			Print("[DialogueFramework] [UI] Item area: panel not measured yet, keeping the layout defaults.");
@@ -1399,7 +1472,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		float gap = 0.02;
 		float halfW = (m_ScrollW - gap) / 2.0;
 
-		//! One group on its own gets the whole width instead of half.
 		if (required == 0 || rewards == 0)
 		{
 			if (required > 0)
@@ -1426,8 +1498,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		LayoutResponseArea(areaTop + areaH + 0.015);
 	}
 
-	//! Group headings follow the speaker line's colour so they sit with the
-	//! rest of the window rather than staying default grey.
 	protected void ApplyGroupLabelColor(Widget label)
 	{
 		if (!label || !m_MenuConfig)
@@ -1449,8 +1519,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			strip.Show(false);
 	}
 
-	//! Fills the given box with one heading and its tiles, scaling the tiles
-	//! up to fill the space rather than leaving them stranded and tiny.
 	protected void LayoutOneGroup(Widget label, Widget strip, array<Widget> tiles, float panelW, float panelH, float boxX, float boxY, float boxW, float boxH)
 	{
 		if (!strip)
@@ -1473,7 +1541,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		float boxWpx = boxW * panelW;
 		float boxHpx = tilesH * panelH;
 
-		//! Try every row split and keep whichever lets the tiles be biggest.
 		float bestScale = 0;
 		int bestPerRow = 1;
 		int bestRows = count;
@@ -1526,7 +1593,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (stripH > tilesH)
 			stripH = tilesH;
 
-		//! Centre the row inside its half of the panel.
 		float stripX = boxX + (boxW - stripW) / 2.0;
 
 		if (label)
@@ -1544,8 +1610,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [UI] Item group: " + count + " tile(s), " + bestPerRow + " per row, " + bestRows + " row(s), scale " + bestScale + ", box " + boxWpx + "x" + boxHpx + "px, tile " + tileW + "x" + tileH + "px");
 	}
 
-	//! Puts the response list under whatever the strip ended up using. Pass 0
-	//! to restore the position authored in the layout.
 	protected void LayoutResponseArea(float topY)
 	{
 		if (!m_ResponseScroll)
@@ -1648,10 +1712,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 		}
 
-		//! Resolve the collection index BEFORE anything else. A NeedAnyCollection
-		//! objective handed in with index -1 is rejected server-side, which is the
-		//! "Quest turn-In failed! / Something went wrong.." toast. If a picker is
-		//! needed the turn-in continues from ExecutePendingObjItemSelection.
 		m_SelectedObjItemIndex = -1;
 
 		ExpansionQuestConfig quest = ExpansionQuestModule.GetModuleInstance().GetQuestConfigByID(m_ActiveQuestID);
@@ -1670,8 +1730,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		ContinueTurnIn(quest);
 	}
 
-	//! Turn-in for whatever remains after the objective item is resolved: either
-	//! a reward picker, or the actual turn-in RPC carrying the resolved index.
 	protected void ContinueTurnIn(ExpansionQuestConfig quest)
 	{
 		if (quest && quest.NeedToSelectReward() && quest.GetRewards() && quest.GetRewards().Count() > 1)
@@ -1688,13 +1746,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		EndConversation();
 	}
 
-	//! Works out which collection item index this turn-in should carry.
-	//!  - No NeedAnyCollection objective            -> leaves index -1, returns false (turn in now).
-	//!  - Objective has a single collection defined  -> index 0, returns false (only one possible).
-	//!  - Exactly one satisfied collection           -> that index, returns false (auto-pick).
-	//!  - More than one satisfied collection          -> shows the picker, returns true.
-	//! Mirrors Expansion's own menu, which drives the index from the FIRST
-	//! NeedAnyCollection objective it finds.
 	protected bool PrepareObjectiveItemSelection(ExpansionQuestConfig quest)
 	{
 		m_ObjItemChoices.Clear();
@@ -1723,9 +1774,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			if (!collections || collections.Count() == 0)
 				continue;
 
-			//! Only one collection defined -> only one possible index. Pick it
-			//! outright so the turn-in works even if the client objective data
-			//! has not caught up yet.
 			if (collections.Count() == 1)
 			{
 				m_SelectedObjItemIndex = 0;
@@ -1753,8 +1801,6 @@ class DialogueWindowMenu : UIScriptedMenu
 				}
 			}
 
-			//! The first NeedAnyCollection objective drives the index, matching
-			//! the stock menu. Stop after it.
 			break;
 		}
 
@@ -1783,7 +1829,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] ShowObjectiveItemSelection() -- " + m_ObjItemChoices.Count() + " collection option(s).");
 
 		if (m_SpeakerName)
-			m_SpeakerName.SetText(m_NPCName);
+			ApplySpeakerName();
 		if (m_SpeakerLine)
 			SetSpeakerLine(PickObjItemPrompt());
 
@@ -1841,7 +1887,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] ShowRewardSelection() -- " + m_CurrentRewards.Count() + " reward option(s).");
 
 		if (m_SpeakerName)
-			m_SpeakerName.SetText(m_NPCName);
+			ApplySpeakerName();
 		if (m_SpeakerLine)
 			SetSpeakerLine(PickRewardPrompt());
 
@@ -1860,9 +1906,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return CreateItemChoiceButton(reward.GetClassName(), reward.GetAmount());
 	}
 
-	//! Shared item button used by both the reward picker and the objective-item
-	//! picker: an item preview, its display name and an amount. Both pickers
-	//! route clicks by button user ID, so the caller keeps the parallel arrays.
 	protected Widget CreateItemChoiceButton(string className, int amount)
 	{
 		if (!m_ResponseList)
@@ -1930,8 +1973,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return ShortenForTile(displayName);
 	}
 
-	//! Tiles are small and the font scales with their height, so a long name
-	//! would run out of the sides. Trim rather than let it bleed.
 	protected string ShortenForTile(string text)
 	{
 		if (text.Length() <= TILE_NAME_MAX)
@@ -2184,6 +2225,11 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected Object GetTalkingNPC()
 	{
+	#ifdef EXPANSIONMODAI
+		if (m_TargetAI)
+			return m_TargetAI;
+	#endif
+
 		if (m_NPCID == -1)
 			return null;
 
@@ -2220,9 +2266,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		return null;
 	}
 
-	//! Which hint icon a response earns, based on what clicking it does.
-	//! NONE with no next node ends the conversation too, so it gets the exit
-	//! icon rather than the speech bubble -- the icon has to match behaviour.
 	protected string IconForResponse(DialogueResponse response)
 	{
 		if (!response)
@@ -2232,6 +2275,12 @@ class DialogueWindowMenu : UIScriptedMenu
 			return ICON_CART;
 
 		if (response.ActionType == DialogueActionType.END_CONVERSATION)
+			return ICON_EXIT;
+
+		if (response.ActionType == DialogueActionType.RECRUIT_AI)
+			return ICON_EXIT;
+
+		if (response.ActionType == DialogueActionType.GO_HOSTILE)
 			return ICON_EXIT;
 
 		if (response.ActionType == DialogueActionType.NONE && response.NextNodeID == -1)
@@ -2244,8 +2293,6 @@ class DialogueWindowMenu : UIScriptedMenu
 	{
 		ImageWidget icon = ImageWidget.Cast(button.FindAnyWidget("DialogueResponseButtonIcon"));
 
-		//! Logged once per window, not per button, so it is readable. This is
-		//! CLIENT-side -- look in your own client log, not the server's.
 		if (!m_IconDiagLogged)
 		{
 			m_IconDiagLogged = true;
@@ -2289,7 +2336,6 @@ class DialogueWindowMenu : UIScriptedMenu
 			icon.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseTextColor));
 		icon.Show(true);
 
-		//! Give the icon room so long wording does not run underneath it.
 		TextWidget label = TextWidget.Cast(button.FindAnyWidget("DialogueResponseButtonText"));
 		if (label)
 			label.SetSize(0.85, 1.0);
@@ -2350,10 +2396,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 		m_RewardDisplayWidgets.Clear();
 
-		//! Delete the preview entities only AFTER every ItemPreviewWidget that
-		//! referenced them has been unlinked. Deleting an entity still bound to
-		//! a live preview widget leaks its slot in the engine's limited preview
-		//! pool, and once that pool is exhausted later previews render blank.
 		DestroyRewardPreviews();
 
 		if (m_ResponseScroll)
@@ -2430,7 +2472,6 @@ class DialogueWindowMenu : UIScriptedMenu
 		{
 			if (idx >= m_CurrentQuests.Count())
 			{
-				//! A button past the quest range is a back-to-conversation button.
 				Print("[DialogueFramework] [DIAG] OnClick -> quest list back to conversation.");
 				ReturnToRootDeferred();
 				return true;
@@ -2506,6 +2547,11 @@ class DialogueWindowMenu : UIScriptedMenu
 		LockPlayerMovement();
 		ResetIconDiagnostics();
 
+	#ifdef EXPANSIONMODAI
+		if (m_TargetAI)
+			m_TargetAI.DialogueFW_RequestHoldClient(true);
+	#endif
+
 		SetFocus(layoutRoot);
 
 		Print("[DialogueFramework] [DIAG] DialogueWindowMenu.OnShow() fired. ContentInitialized=" + m_ContentInitialized);
@@ -2522,14 +2568,12 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] DialogueWindowMenu.OnHide() fired.");
 		StopDialogueVoice();
 
-		//! Release the item previews here, on the reliable close hook, rather
-		//! than waiting on the destructor -- the script object can outlive the
-		//! closed menu by a frame or two, and until its previews are deleted
-		//! their slots in the engine's preview pool stay taken, so the next
-		//! time the menu opens the pictures come up blank. This covers every
-		//! close path: the X, accepting/handing in a quest, and the game
-		//! closing the menu when something like the quest log opens over it.
 		ClearButtons();
+
+	#ifdef EXPANSIONMODAI
+		if (m_TargetAI)
+			m_TargetAI.DialogueFW_RequestHoldClient(false);
+	#endif
 
 		UnlockPlayerMovement();
 		super.OnHide();

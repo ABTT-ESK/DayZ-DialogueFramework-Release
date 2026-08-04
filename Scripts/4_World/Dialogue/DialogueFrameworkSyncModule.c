@@ -20,8 +20,39 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 		EnableInvokeConnect();
 		Expansion_EnableRPCManager();
 		Expansion_RegisterClientRPC("RPC_SyncDialogueTrees");
+		Expansion_RegisterClientRPC("RPC_SyncPlayerVars");
 
 		Print("[DialogueFramework] [DIAG] RPC_SyncDialogueTrees registered.");
+	}
+
+	static void DialogueFW_SendVars(PlayerIdentity identity)
+	{
+		if (!identity || !g_Game.IsServer())
+			return;
+
+		DialogueFrameworkSyncModule mod = DialogueFrameworkSyncModule.Cast(
+			CF_ModuleCoreManager.Get(DialogueFrameworkSyncModule));
+		if (mod)
+			mod.SendVarsToClient(identity);
+	}
+
+	void SendVarsToClient(PlayerIdentity identity)
+	{
+		DialoguePlayerState state = DialogueVars.GetInstance().GetServerState(identity.GetId());
+
+		auto rpc = Expansion_CreateRPC("RPC_SyncPlayerVars");
+		state.OnSend(rpc);
+		rpc.Expansion_Send(true, identity);
+	}
+
+	void RPC_SyncPlayerVars(PlayerIdentity sender, Object target, ParamsReadContext ctx)
+	{
+		DialoguePlayerState state = new DialoguePlayerState();
+		if (state.OnRecieve(ctx))
+		{
+			DialogueVars.GetInstance().SetClientState(state);
+			Print("[DialogueFramework] Received " + state.Names.Count() + " dialogue variable(s) from server.");
+		}
 	}
 
 	override void OnInvokeConnect(Class sender, CF_EventArgs args)
@@ -61,6 +92,8 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 		rpc.Write(questTexts.Count());
 		for (int q = 0; q < questTexts.Count(); q++)
 			questTexts.GetElement(q).OnSend(rpc);
+
+		DialogueVars.GetInstance().GetServerState(identity.GetId()).OnSend(rpc);
 
 		rpc.Expansion_Send(true, identity);
 
@@ -121,6 +154,13 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 				DialogueManager.GetInstance().RegisterQuestText(questText);
 			}
 			Print("[DialogueFramework] Received per-quest text for " + questTextCount + " quest(s).");
+		}
+
+		DialoguePlayerState varState = new DialoguePlayerState();
+		if (varState.OnRecieve(ctx))
+		{
+			DialogueVars.GetInstance().SetClientState(varState);
+			Print("[DialogueFramework] Received " + varState.Names.Count() + " dialogue variable(s) from server.");
 		}
 
 		Print("[DialogueFramework] Received " + treeCount + " dialogue tree(s) from server.");

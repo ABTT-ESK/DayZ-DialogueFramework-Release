@@ -1,0 +1,48 @@
+{
+    "ID": 8201,
+    "NPCIDs": [],
+    "AIPatrolID": 1,
+    "AIPatrolSubID": 0,
+    "RootNodeID": 1,
+    "GreetingVoiceLineIDs": [],
+    "FarewellVoiceLineIDs": [],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "Checkpoint's closed to loiterers, friend. State your business.",
+            "VoiceLineIDs": [],
+            "SpeakerLines": [
+                { "Text": "You again. Keep it moving unless you need something.", "RequiredQuestID": -1, "OverrideQuestID": -1, "VoiceLineIDs": [] }
+            ],
+            "Responses": [
+                { "Text": "What are you lot guarding?", "NextNodeID": 2, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Seen any trouble around here?", "NextNodeID": 3, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Fall in with me. I could use the rifle.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "RECRUIT_AI" },
+                { "Text": "Just passing through.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "This checkpoint, and everyone dumb enough to stand behind it. Pay's bad, hours are worse.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "Anything else?", "NextNodeID": 3, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Back to it, then.", "NextNodeID": 1, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Good talk.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        },
+        {
+            "ID": 3,
+            "Type": "STANDARD",
+            "SpeakerText": "Infected wander up from the tracks now and then. Bandits from the west are the real problem.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                { "Text": "What are you guarding again?", "NextNodeID": 2, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Appreciated. I'll be careful.", "NextNodeID": 1, "RequiredQuestID": -1, "ActionType": "NONE" },
+                { "Text": "Thanks. Take care.", "NextNodeID": -1, "RequiredQuestID": -1, "ActionType": "END_CONVERSATION" }
+            ]
+        }
+    ]
+}

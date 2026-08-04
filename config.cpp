@@ -10,7 +10,8 @@ class CfgPatches
 			"DZ_Scripts",
 			"DayZExpansion_Core_Scripts",
 			"DayZExpansion_Quests_Scripts",
-			"DayZExpansion_Market_Scripts"
+			"DayZExpansion_Market_Scripts",
+			"DayZExpansion_AI_Scripts"
 		};
 	};
 };
@@ -28,7 +29,7 @@ class CfgMods
 		credits = "ABTT ESK";
 		author = "ABTT ESK";
 		authorID = "0";
-		version = "1.1.1";
+		version = "1.2.0";
 		extra = 0;
 		type = "mod";
 		dependencies[] = {"Game", "World", "Mission"};

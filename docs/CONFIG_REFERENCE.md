@@ -33,6 +33,10 @@ field** shown and explained inline.
   "TraderPositions": [],                // <<<<< TRADER dialogue only. ONE specific trader at this world position, e.g. "1234.50 300.00 5678.90". Most specific key -- wins over the two above
   "TraderPositionRadius": 50.0,         // <<<<< How close (metres) a trader must be to a listed position to match. Generous is fine -- AI traders drift, and the nearest listed position still breaks ties between outposts
   "TraderMinKeyMatches": 2,             // <<<<< How many of the three keys above must agree. 2 is recommended: definitions and entity classes are shared between outposts, and positions drift, but two agreeing is reliable
+  "AIPatrolID": 0,                      // <<<<< FRIENDLY-AI dialogue (needs Expansion AI). Matches AI spawned from your AIPatrol\AIPatrols.json patrol with this DialogueID. 0 = not an AI tree
+  "AIPatrolSubID": 0,                   // <<<<< With AIPatrolID set: 0 = any unit in that patrol; a number = only that one unit (1, 2, 3...). Lets each unit in a multi-AI patrol have its own dialogue
+  "ReputationVar": "",                  // <<<<< Optional. The variable that is THIS character's reputation (e.g. "rep_hana"). Set it so this character's rep is separate from others and shown in the window
+  "ReputationTiers": [],                // <<<<< Optional display bands for the marker, e.g. [ { "Threshold": 3, "Label": "Friendly" } ]. Highest threshold at/below the value wins; empty = show the number
   "RootNodeID": 1,                      // <<<<< Which node ID is shown first when the conversation opens. Must match one of the node IDs below
 
   "GreetingVoiceLineIDs": [             // <<<<< Voice lines played when the conversation OPENS. One picked at random. Empty array = silent greeting
@@ -177,6 +181,18 @@ NPC's generic fallback. Split across as many files as you like.
       "NoQuestsLeaveTexts": [            // <<<<< Buttons shown with it that end the conversation
         "I'll head that way."
       ],
+      "QuestListBackTexts": [           // <<<<< Back-to-conversation button on the quest-list screen. Overrides the NPC's Quest talk default for this quest
+        "Never mind the list."
+      ],
+      "OfferBackTexts": [              // <<<<< Back-to-conversation button on this quest's offer screen
+        "Let me think on it."
+      ],
+      "InProgressBackTexts": [         // <<<<< Back-to-conversation button while this quest is active
+        "I'll keep at it."
+      ],
+      "TurnInBackTexts": [             // <<<<< Back-to-conversation button on this quest's turn-in screen
+        "One more thing first."
+      ],
       "RewardSelectText": "Take one."    // <<<<< SPOKEN line above the reward picker. A single string, not an array
     }
   ]
@@ -218,6 +234,11 @@ arrays of the same name, then to plain built-in text. **Every array is a
 random pick**, so even one NPC with three phrasings and no per-quest wording
 stops sounding scripted. For the no-quests step, **the player always gets at
 least one working button**, so it can never trap them.
+
+The per-screen back buttons (`QuestListBackTexts`, `OfferBackTexts`,
+`InProgressBackTexts`, `TurnInBackTexts`) resolve **per quest first, then the
+NPC's Quest talk default, then none**. A screen with nothing set simply shows
+no back button. `NoQuestsBackTexts` serves the no-quests screen.
 
 ---
 
@@ -291,7 +312,70 @@ own layout file. See [`MENU_CONFIG_GUIDE.md`](MENU_CONFIG_GUIDE.md).
 
 ---
 
-# 4. When changes take effect
+# 4. AI aggro — `AISettings.json`
+
+Requires the Expansion AI module. Controls what happens after a `GO_HOSTILE`
+dialogue choice turns a talkable patrol against the player. Written with these
+defaults on first server start; edit and restart.
+
+```jsonc
+{
+  "ResetOnDeath": 1,             // <<<<< Clear their aggro when the player dies
+  "ResetOnWeaponStowed": 1,      // <<<<< Clear when the player has no weapon in hands
+  "ResetOnLeaveArea": 1,         // <<<<< Clear when the player gets far enough away
+  "LeaveAreaDistance": 60.0,     // <<<<< Metres for "far enough away"
+  "ResetOnSurrender": 1,         // <<<<< Clear when the player surrenders (hands up)
+  "PersistentAggroThreshold": 0, // <<<<< 0 = never permanent. Otherwise, after this many times of angering them, that player is permanently hostile
+  "PersistenceMode": "FACTION",  // <<<<< FACTION (whole faction remembers) | PATROL (only that patrol) | BOTH (either count triggers)
+  "CheckInterval": 2.0           // <<<<< Seconds between calm-down checks
+}
+```
+
+Only AI made hostile through dialogue are managed here; ordinary AI combat is
+untouched. `1`/`0` are on/off. Anger counts are stored per player and persist
+across relogs.
+
+**Per-patrol overrides.** `PersistentAggroThreshold` and `PersistenceMode` are
+the server defaults; a patrol in `AIPatrol\AIPatrols.json` can override them with
+its own `PersistentAggroThreshold` (`-1` = use global, `0` = never permanent,
+`N` = permanent after N) and `PersistenceMode` (`""` = use global). So different
+patrols can be quick to hold a grudge, slow, or never.
+
+---
+
+# 5. Custom factions — `Factions\Factions.json`
+
+Requires the Expansion AI module. Lets you define your own AI factions and give
+them to talkable patrols (set a patrol's `Faction` to one of these names). Up to
+**32** factions; extras are ignored. Server-side only — no client sync needed.
+
+```jsonc
+{
+  "Factions": [
+    {
+      "Name": "Bandits",             // <<<<< used as a patrol's "Faction", and by other factions' FriendlyFactions
+      "Loadout": "",                 // <<<<< loadout file name; "" = default human loadout
+      "PlayerStance": "HOSTILE",     // <<<<< FRIENDLY (walk up & talk) | GUARD (defends when you raise a weapon) | HOSTILE (attacks on sight)
+      "FriendlyFactions": ["Raiders"] // <<<<< names this faction won't fight (custom or built-in)
+    }
+  ]
+}
+```
+
+Notes:
+
+- A faction is always friendly with itself; no need to list its own name.
+- For two **custom** factions to ignore each other, each must list the other in
+  `FriendlyFactions` (friendliness is checked both ways).
+- Befriending a **built-in** Expansion faction only takes effect if the built-in
+  reciprocates by its own rules (e.g. Guards are friendly to guards/passive) —
+  an Expansion limitation.
+- `PlayerStance` is the default before any `GO_HOSTILE`; the aggro system in
+  section 4 still governs what happens after a dialogue turns them hostile.
+
+---
+
+# 6. When changes take effect
 
 | Changed | Needs |
 |---|---|
@@ -302,7 +386,7 @@ own layout file. See [`MENU_CONFIG_GUIDE.md`](MENU_CONFIG_GUIDE.md).
 Both configs are pushed to clients when they connect, so a reconnect alone
 won't pick up changes — the client process has to restart.
 
-# 5. Where to look when something's wrong
+# 7. Where to look when something's wrong
 
 | Symptom | Where to look |
 |---|---|

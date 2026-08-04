@@ -7,6 +7,60 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.2.0]
+
+### Added
+- **Custom AI factions.** Make your own factions instead of being limited to
+  Expansion's built-in ones. Each faction has a name, a loadout, how it treats
+  players (walk up and talk / defends itself when you raise a weapon / hostile on
+  sight), and a list of other factions it won't fight. Up to 32, all built in
+  DialogueForge's new Factions tab, then assigned to your talkable patrols.
+  (Making a faction friendly with one of Expansion's *built-in* factions only
+  works where that built-in's own rules allow it — an Expansion limitation.)
+- **AI can calm back down after a conversation turns them hostile.** When a
+  choice makes a patrol turn on the player, they can stand down again — when the
+  player dies, puts their weapon away, puts their hands up, or gets far enough
+  away (each one optional, with a distance you set). You can also let certain
+  patrols hold a grudge: after enough bad encounters a player becomes permanently
+  hostile to them — remembered by the whole faction, just that patrol, or either.
+  Set a server-wide default and override it per patrol, so one patrol never
+  forgives after two bad runs while another takes six and a third never holds a
+  grudge at all. Only AI angered through dialogue are affected; normal AI combat
+  is untouched. All set in DialogueForge's Global AI settings and AI patrols tabs.
+  (Re-attacking a marked player on sight across respawns is coming in a follow-up.)
+- **Reputation & story flags that follow the player everywhere.** Choices can
+  raise, lower or set hidden values that stick to the player and are shared
+  across every NPC — so what you say to one character changes how others treat
+  you. Use them to unlock or hide individual responses, change a greeting, or
+  even swap in a whole different conversation. It's all done in DialogueForge by
+  picking characters and factions from dropdowns — no codes to type. Standing is
+  saved per player and survives relogs.
+- **Per-character reputation, shown in the window.** Give a character its own
+  reputation, so a player can be trusted by one character and disliked by
+  another. When set, the dialogue window shows the player's standing next to the
+  character's name — a word you choose (Hostile / Wary / Friendly / Trusted…) or
+  a number — updating live as choices change it.
+- **Stop reputation farming.** Any response can be limited to a set number of
+  uses per player — once, or any number you like. After that it disappears, so
+  players can't grind standing by spamming the same choice.
+- **Talk to Expansion AI, and recruit them.** Spawn talkable patrols through the
+  mod (set up in DialogueForge's AI patrols tab); each patrol carries an ID so a
+  conversation locks onto the exact unit — two guards in one patrol can say
+  completely different things. Walk up and a **Talk** prompt opens a full
+  branching conversation, voice lines and all. A response can recruit the AI into
+  the player's group (respecting Expansion's own recruit settings, and optionally
+  locked behind a completed quest), and the AI holds still while you talk and
+  resumes its patrol afterwards. Another response can turn the whole patrol
+  hostile — for encounters that can go sideways. **This adds the Expansion AI
+  module as a requirement.**
+- **Multiple conversations per NPC, unlocked by quests.** A character can have
+  several complete conversations, each opening once the player has finished a
+  particular quest — so an NPC's dialogue grows with the story instead of piling
+  every option onto one screen. Built as clean, separate conversations in
+  DialogueForge; NPCs that use only one behave exactly as before.
+
+---
+
 ## [1.1.1]
 
 Shout out to "Too Often Played" for the bug reports that helped push most fixes this round.

@@ -87,8 +87,6 @@ class DialogueManager
 
 		file.Sanitize();
 
-		//! Write any newly-added fields into the owner's file so they can see
-		//! and edit them, but only ever after a backup succeeds.
 		int loadedVersion = file.ConfigVersion;
 		if (file.UpgradeFromOlderVersion())
 		{
@@ -117,9 +115,6 @@ class DialogueManager
 		}
 	}
 
-	//! Copies a quest text file aside before it is rewritten. Named after the
-	//! version it is a copy of, so an upgrade never overwrites an older
-	//! backup. If this fails the file is left completely alone.
 	protected bool BackupQuestTextFile(string path, int fromVersion)
 	{
 		string backupPath = path + ".v" + fromVersion + ".bak";
@@ -308,9 +303,17 @@ class DialogueManager
 
 	protected float ClosestListedDistance(DialogueTree tree, vector position)
 	{
+		return ClosestListedDistanceIn(tree.TraderPositions, position);
+	}
+
+	protected float ClosestListedDistanceIn(array<string> positions, vector position)
+	{
 		float closest = -1;
 
-		foreach (string entry : tree.TraderPositions)
+		if (!positions)
+			return closest;
+
+		foreach (string entry : positions)
 		{
 			if (entry == "")
 				continue;
@@ -369,6 +372,31 @@ class DialogueManager
 		return null;
 	}
 
+	DialogueTree GetTreeForAIPatrol(int patrolID, int subID)
+	{
+		DialogueTree patrolWide = null;
+
+		foreach (DialogueTree tree : m_AllTrees)
+		{
+			if (!tree || tree.AIPatrolID != patrolID)
+				continue;
+
+			if (subID > 0 && tree.AIPatrolSubID == subID)
+			{
+				Print("[DialogueFramework] [AI] Matched tree ID=" + tree.ID + " by patrol " + patrolID + " sub " + subID);
+				return tree;
+			}
+
+			if (tree.AIPatrolSubID == 0 && !patrolWide)
+				patrolWide = tree;
+		}
+
+		if (patrolWide)
+			Print("[DialogueFramework] [AI] Matched tree ID=" + patrolWide.ID + " by patrol " + patrolID + " (any unit)");
+
+		return patrolWide;
+	}
+
 	DialogueTree GetTreeForNPC(int npcID)
 	{
 		return m_TreesByNPCID.Get(npcID);
@@ -393,6 +421,41 @@ class DialogueManager
 
 		if (seenIDs.Find(tree.RootNodeID) == -1)
 			LogIssue(context + ": RootNodeID " + tree.RootNodeID + " doesn't match any node -- this tree will never render anything for its NPC(s).");
+
+		if (tree.Stages)
+		{
+			for (int s = 0; s < tree.Stages.Count(); s++)
+			{
+				DialogueTreeStage stage = tree.Stages[s];
+				if (!stage)
+					continue;
+
+				string stageLabel = context + ": Stage " + (s + 1);
+
+				if (stage.RequiredQuestID <= 0)
+					LogIssue(stageLabel + " has no RequiredQuestID -- it will never unlock.");
+
+				array<int> stageIDs = new array<int>;
+				if (stage.Nodes)
+				{
+					foreach (DialogueNode stageNode : stage.Nodes)
+					{
+						if (!stageNode)
+							continue;
+
+						if (stageIDs.Find(stageNode.ID) != -1)
+							LogIssue(stageLabel + ": duplicate node ID " + stageNode.ID + " -- only the first is reachable.");
+						else
+							stageIDs.Insert(stageNode.ID);
+					}
+				}
+
+				if (stageIDs.Count() == 0)
+					LogIssue(stageLabel + " (quest " + stage.RequiredQuestID + ") has no nodes -- it will be ignored and the base tree used instead.");
+				else if (stageIDs.Find(stage.RootNodeID) == -1)
+					LogIssue(stageLabel + " (quest " + stage.RequiredQuestID + "): RootNodeID " + stage.RootNodeID + " doesn't match any node in that stage.");
+			}
+		}
 
 		foreach (DialogueNode checkNode : tree.Nodes)
 		{
@@ -658,6 +721,9 @@ class DialogueManager
 
 	protected void LoadTreeFile(string fullPath, int folderNPCID, string folderTraderID, inout int treeCount, inout int npcCount)
 	{
+		if (ExpansionString.EndsWithIgnoreCase(fullPath, "AIPatrols.json"))
+			return;
+
 		DialogueTree tree = new DialogueTree();
 		JsonFileLoader<DialogueTree>.JsonLoadFile(fullPath, tree);
 		tree.Sanitize();
@@ -680,11 +746,16 @@ class DialogueManager
 		if (tree.TraderPositions && tree.TraderPositions.Count() > 0)
 			hasTraders = true;
 
-		if (!hasNPCs && !hasTraders)
+		bool hasAI = tree.AIPatrolID > 0;
+
+		if (!hasNPCs && !hasTraders && !hasAI)
 		{
-			LogIssue(fullPath + " has no NPCIDs and no trader keys (TraderIDs / TraderClassNames / TraderPositions), and isn't in a NPC_<id> or Trader_<name> folder -- skipping. (This also fires if the file failed to parse as valid JSON.)");
+			LogIssue(fullPath + " has no NPCIDs, no trader keys (TraderIDs / TraderClassNames / TraderPositions) and no AIPatrolID, and isn't in a NPC_<id> or Trader_<name> folder -- skipping. (This also fires if the file failed to parse as valid JSON.)");
 			return;
 		}
+
+		if (hasAI)
+			Print("[DialogueFramework] [AI] Loaded AI tree from " + fullPath);
 
 		if (hasTraders)
 		{
@@ -897,6 +968,15 @@ class DialogueManager
 		FPrintln(f, "                    one of several rewards. ONE is picked at random");
 		FPrintln(f, "                    (it is a line of dialogue, not a set of buttons).");
 		FPrintln(f, "                    Empty falls back to a plain default.");
+		FPrintln(f, "  Stages          - array of extra quest-locked trees for this NPC,");
+		FPrintln(f, "                    each { RequiredQuestID, RootNodeID, Nodes }. Once the");
+		FPrintln(f, "                    player has COMPLETED RequiredQuestID, that whole tree");
+		FPrintln(f, "                    replaces the base one -- its own nodes and root, a");
+		FPrintln(f, "                    clean conversation for that stage of the story. Add");
+		FPrintln(f, "                    as many as you like; the highest completed quest");
+		FPrintln(f, "                    wins. Each stage's node IDs are separate from the");
+		FPrintln(f, "                    base tree and every other stage. Empty = only the");
+		FPrintln(f, "                    base tree is ever used.");
 		FPrintln(f, "  Nodes           - array of DialogueNode");
 		FPrintln(f, "");
 		FPrintln(f, "DialogueNode fields:");

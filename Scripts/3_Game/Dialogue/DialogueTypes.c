@@ -15,31 +15,204 @@ class DialogueActionType
 	static const string END_CONVERSATION = "END_CONVERSATION";
 
 	static const string OPEN_TRADER = "OPEN_TRADER";
+
+	static const string RECRUIT_AI = "RECRUIT_AI";
+
+	static const string GO_HOSTILE = "GO_HOSTILE";
 }
 
-//! One candidate line for a node. When a node carries these, the menu picks
-//! one at random from the base SpeakerText plus whichever of these the player
-//! qualifies for, so a greeting can vary and a line can be revealed once a
-//! quest is completed. RequiredQuestID <= 0 means "always shown".
+class DialogueVarOp
+{
+	string Name;
+	string Op = "SET";
+	int Value = 0;
+
+	void Sanitize()
+	{
+		if (Op == "")
+			Op = "SET";
+		Op.ToUpper();
+	}
+
+	void OnSend(ScriptRPC rpc)
+	{
+		rpc.Write(Name);
+		rpc.Write(Op);
+		rpc.Write(Value);
+	}
+
+	bool OnRecieve(ParamsReadContext ctx)
+	{
+		if (!ctx.Read(Name)) return false;
+		if (!ctx.Read(Op)) return false;
+		if (!ctx.Read(Value)) return false;
+		return true;
+	}
+}
+
+class DialogueVarOpList
+{
+	static void Write(ScriptRPC rpc, array<ref DialogueVarOp> ops)
+	{
+		rpc.Write(ops.Count());
+		foreach (DialogueVarOp op : ops)
+			op.OnSend(rpc);
+	}
+
+	static bool Read(ParamsReadContext ctx, array<ref DialogueVarOp> target)
+	{
+		int count;
+		if (!ctx.Read(count)) return false;
+		target.Clear();
+		for (int i = 0; i < count; i++)
+		{
+			DialogueVarOp op = new DialogueVarOp();
+			if (!op.OnRecieve(ctx)) return false;
+			target.Insert(op);
+		}
+		return true;
+	}
+
+	static void SanitizeAll(array<ref DialogueVarOp> ops)
+	{
+		if (!ops)
+			return;
+		foreach (DialogueVarOp op : ops)
+		{
+			if (op)
+				op.Sanitize();
+		}
+	}
+
+	static bool Compare(int current, string op, int value)
+	{
+		if (op == "EQUALS") return current == value;
+		if (op == "NOT_EQUAL") return current != value;
+		if (op == "AT_LEAST") return current >= value;
+		if (op == "AT_MOST") return current <= value;
+		if (op == "MORE_THAN") return current > value;
+		if (op == "BELOW") return current < value;
+		return true;
+	}
+
+	static bool Evaluate(array<ref DialogueVarOp> conditions, DialoguePlayerState state)
+	{
+		if (!conditions || conditions.Count() == 0)
+			return true;
+
+		foreach (DialogueVarOp condition : conditions)
+		{
+			if (!condition)
+				continue;
+
+			int current = 0;
+			if (state)
+				current = state.Get(condition.Name);
+
+			if (!Compare(current, condition.Op, condition.Value))
+				return false;
+		}
+
+		return true;
+	}
+
+	static void Apply(array<ref DialogueVarOp> ops, DialoguePlayerState state)
+	{
+		if (!ops || !state)
+			return;
+
+		foreach (DialogueVarOp op : ops)
+		{
+			if (!op || op.Name == "")
+				continue;
+
+			int current = state.Get(op.Name);
+
+			if (op.Op == "INCREASE")
+				state.Set(op.Name, current + op.Value);
+			else if (op.Op == "DECREASE")
+				state.Set(op.Name, current - op.Value);
+			else
+				state.Set(op.Name, op.Value);
+		}
+	}
+}
+
+class DialogueRepTier
+{
+	int Threshold = 0;
+	string Label;
+
+	void OnSend(ScriptRPC rpc)
+	{
+		rpc.Write(Threshold);
+		rpc.Write(Label);
+	}
+
+	bool OnRecieve(ParamsReadContext ctx)
+	{
+		if (!ctx.Read(Threshold)) return false;
+		if (!ctx.Read(Label)) return false;
+		return true;
+	}
+}
+
+class DialogueRepTierList
+{
+	static void Write(ScriptRPC rpc, array<ref DialogueRepTier> tiers)
+	{
+		rpc.Write(tiers.Count());
+		foreach (DialogueRepTier tier : tiers)
+			tier.OnSend(rpc);
+	}
+
+	static bool Read(ParamsReadContext ctx, array<ref DialogueRepTier> target)
+	{
+		int count;
+		if (!ctx.Read(count)) return false;
+		target.Clear();
+		for (int i = 0; i < count; i++)
+		{
+			DialogueRepTier tier = new DialogueRepTier();
+			if (!tier.OnRecieve(ctx)) return false;
+			target.Insert(tier);
+		}
+		return true;
+	}
+
+	static string LabelFor(array<ref DialogueRepTier> tiers, int value)
+	{
+		string label = "";
+		int best = 0;
+		bool found = false;
+		foreach (DialogueRepTier tier : tiers)
+		{
+			if (!tier)
+				continue;
+			if (value >= tier.Threshold && (!found || tier.Threshold >= best))
+			{
+				best = tier.Threshold;
+				label = tier.Label;
+				found = true;
+			}
+		}
+		return label;
+	}
+}
+
 class DialogueSpeakerLine
 {
 	string Text;
-
-	//! Eligibility gate: <= 0 means always in the random pool, otherwise this
-	//! line only joins the pool once the quest is COMPLETED.
 	int RequiredQuestID = -1;
-
-	//! Override gate: once this quest is COMPLETED this line stops being one of
-	//! the random options and becomes the fixed greeting. If several lines
-	//! qualify, the one with the highest OverrideQuestID wins. <= 0 = no
-	//! override.
 	int OverrideQuestID = -1;
 
 	ref array<string> VoiceLineIDs;
+	ref array<ref DialogueVarOp> RequiredVars;
 
 	void DialogueSpeakerLine()
 	{
 		VoiceLineIDs = new array<string>;
+		RequiredVars = new array<ref DialogueVarOp>;
 	}
 
 	void Sanitize()
@@ -52,6 +225,10 @@ class DialogueSpeakerLine
 
 		if (!VoiceLineIDs)
 			VoiceLineIDs = new array<string>;
+
+		if (!RequiredVars)
+			RequiredVars = new array<ref DialogueVarOp>;
+		DialogueVarOpList.SanitizeAll(RequiredVars);
 	}
 
 	void OnSend(ScriptRPC rpc)
@@ -64,6 +241,7 @@ class DialogueSpeakerLine
 			rpc.Write(voiceLine);
 
 		rpc.Write(OverrideQuestID);
+		DialogueVarOpList.Write(rpc, RequiredVars);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -82,6 +260,7 @@ class DialogueSpeakerLine
 		}
 
 		if (!ctx.Read(OverrideQuestID)) return false;
+		if (!DialogueVarOpList.Read(ctx, RequiredVars)) return false;
 
 		return true;
 	}
@@ -95,7 +274,6 @@ class DialogueNode
 
 	ref array<string> VoiceLineIDs;
 
-	//! Optional extra lines. Empty = just SpeakerText, exactly as before.
 	ref array<ref DialogueSpeakerLine> SpeakerLines;
 
 	ref array<ref DialogueResponse> Responses;
@@ -197,6 +375,18 @@ class DialogueResponse
 	int RequiredQuestID = -1;
 	string ActionType = DialogueActionType.NONE;
 
+	ref array<ref DialogueVarOp> RequiredVars;
+	ref array<ref DialogueVarOp> SetVars;
+
+	int MaxUses = 0;
+	string UsesKey = "";
+
+	void DialogueResponse()
+	{
+		RequiredVars = new array<ref DialogueVarOp>;
+		SetVars = new array<ref DialogueVarOp>;
+	}
+
 	void Sanitize()
 	{
 		if (RequiredQuestID <= 0)
@@ -207,6 +397,17 @@ class DialogueResponse
 
 		if (NextNodeID == 0)
 			NextNodeID = -1;
+
+		if (MaxUses < 0)
+			MaxUses = 0;
+
+		if (!RequiredVars)
+			RequiredVars = new array<ref DialogueVarOp>;
+		DialogueVarOpList.SanitizeAll(RequiredVars);
+
+		if (!SetVars)
+			SetVars = new array<ref DialogueVarOp>;
+		DialogueVarOpList.SanitizeAll(SetVars);
 	}
 
 	void OnSend(ScriptRPC rpc)
@@ -215,6 +416,10 @@ class DialogueResponse
 		rpc.Write(NextNodeID);
 		rpc.Write(RequiredQuestID);
 		rpc.Write(ActionType);
+		DialogueVarOpList.Write(rpc, RequiredVars);
+		DialogueVarOpList.Write(rpc, SetVars);
+		rpc.Write(MaxUses);
+		rpc.Write(UsesKey);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -223,6 +428,81 @@ class DialogueResponse
 		if (!ctx.Read(NextNodeID)) return false;
 		if (!ctx.Read(RequiredQuestID)) return false;
 		if (!ctx.Read(ActionType)) return false;
+		if (!DialogueVarOpList.Read(ctx, RequiredVars)) return false;
+		if (!DialogueVarOpList.Read(ctx, SetVars)) return false;
+		if (!ctx.Read(MaxUses)) return false;
+		if (!ctx.Read(UsesKey)) return false;
+		return true;
+	}
+}
+
+class DialogueTreeStage
+{
+	int RequiredQuestID = -1;
+	int RootNodeID = 1;
+	int Priority = 0;
+	ref array<ref DialogueNode> Nodes;
+	ref array<ref DialogueVarOp> RequiredVars;
+
+	void DialogueTreeStage()
+	{
+		Nodes = new array<ref DialogueNode>;
+		RequiredVars = new array<ref DialogueVarOp>;
+	}
+
+	void Sanitize()
+	{
+		if (RequiredQuestID <= 0)
+			RequiredQuestID = -1;
+
+		if (RootNodeID <= 0)
+			RootNodeID = 1;
+
+		if (!Nodes)
+			Nodes = new array<ref DialogueNode>;
+
+		foreach (DialogueNode node : Nodes)
+		{
+			if (node)
+				node.Sanitize();
+		}
+
+		if (!RequiredVars)
+			RequiredVars = new array<ref DialogueVarOp>;
+		DialogueVarOpList.SanitizeAll(RequiredVars);
+	}
+
+	void OnSend(ScriptRPC rpc)
+	{
+		rpc.Write(RequiredQuestID);
+		rpc.Write(RootNodeID);
+
+		rpc.Write(Nodes.Count());
+		foreach (DialogueNode node : Nodes)
+			node.OnSend(rpc);
+
+		rpc.Write(Priority);
+		DialogueVarOpList.Write(rpc, RequiredVars);
+	}
+
+	bool OnRecieve(ParamsReadContext ctx)
+	{
+		if (!ctx.Read(RequiredQuestID)) return false;
+		if (!ctx.Read(RootNodeID)) return false;
+
+		int nodeCount;
+		if (!ctx.Read(nodeCount)) return false;
+		Nodes.Clear();
+		for (int i = 0; i < nodeCount; i++)
+		{
+			DialogueNode node = new DialogueNode();
+			if (!node.OnRecieve(ctx)) return false;
+			Nodes.Insert(node);
+		}
+
+		if (!ctx.Read(Priority)) return false;
+		if (!DialogueVarOpList.Read(ctx, RequiredVars)) return false;
+
 		return true;
 	}
 }
@@ -243,34 +523,29 @@ class DialogueTree
 
 	int TraderMinKeyMatches = 1;
 
+	int AIPatrolID = 0;
+
+	int AIPatrolSubID = 0;
+
+	string ReputationVar = "";
+
+	ref array<ref DialogueRepTier> ReputationTiers;
+
 	int RootNodeID;
 
 	ref array<string> GreetingVoiceLineIDs;
 	ref array<string> FarewellVoiceLineIDs;
 
-	//! Lines spoken above the live quest list, one picked at random each time.
-	//! Empty = built-in wording.
 	ref array<string> QuestListTexts;
-
-	//! Fallback for when this NPC has nothing available and no completed quest
-	//! of theirs supplies its own NoQuestsTexts. One picked at random.
 	ref array<string> NoQuestsTexts;
-
-	//! Fallback buttons for that same case. Every entry is its own button.
 	ref array<string> NoQuestsBackTexts;
 	ref array<string> NoQuestsLeaveTexts;
-
-	//! Voice lines for the no-quests step, one picked at random.
 	ref array<string> NoQuestsVoiceLineIDs;
-
-	//! Per-screen "back to the conversation" buttons. Each renders only on the
-	//! screen it is named for; empty falls back to the mod default (no button,
-	//! except the no-quests step which keeps its built-in Back). The no-quests
-	//! screen is still served by NoQuestsBackTexts above.
 	ref array<string> QuestListBackTexts;
 	ref array<string> OfferBackTexts;
 	ref array<string> InProgressBackTexts;
 	ref array<string> TurnInBackTexts;
+	ref array<ref DialogueTreeStage> Stages;
 
 	ref array<ref DialogueNode> Nodes;
 
@@ -291,7 +566,9 @@ class DialogueTree
 		OfferBackTexts = new array<string>;
 		InProgressBackTexts = new array<string>;
 		TurnInBackTexts = new array<string>;
+		Stages = new array<ref DialogueTreeStage>;
 		Nodes = new array<ref DialogueNode>;
+		ReputationTiers = new array<ref DialogueRepTier>;
 	}
 
 	void Sanitize()
@@ -313,6 +590,15 @@ class DialogueTree
 
 		if (TraderMinKeyMatches < 1)
 			TraderMinKeyMatches = 1;
+
+		if (AIPatrolID < 0)
+			AIPatrolID = 0;
+
+		if (AIPatrolSubID < 0)
+			AIPatrolSubID = 0;
+
+		if (!ReputationTiers)
+			ReputationTiers = new array<ref DialogueRepTier>;
 
 		if (!GreetingVoiceLineIDs)
 			GreetingVoiceLineIDs = new array<string>;
@@ -346,6 +632,15 @@ class DialogueTree
 
 		if (!TurnInBackTexts)
 			TurnInBackTexts = new array<string>;
+
+		if (!Stages)
+			Stages = new array<ref DialogueTreeStage>;
+
+		foreach (DialogueTreeStage stage : Stages)
+		{
+			if (stage)
+				stage.Sanitize();
+		}
 
 		if (!Nodes)
 			Nodes = new array<ref DialogueNode>;
@@ -425,9 +720,18 @@ class DialogueTree
 		foreach (string turnInBack : TurnInBackTexts)
 			rpc.Write(turnInBack);
 
+		rpc.Write(Stages.Count());
+		foreach (DialogueTreeStage stage : Stages)
+			stage.OnSend(rpc);
+
 		rpc.Write(Nodes.Count());
 		foreach (DialogueNode node : Nodes)
 			node.OnSend(rpc);
+
+		rpc.Write(AIPatrolID);
+		rpc.Write(AIPatrolSubID);
+		rpc.Write(ReputationVar);
+		DialogueRepTierList.Write(rpc, ReputationTiers);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -588,6 +892,16 @@ class DialogueTree
 			TurnInBackTexts.Insert(turnInBack);
 		}
 
+		int stageCount;
+		if (!ctx.Read(stageCount)) return false;
+		Stages.Clear();
+		for (int st = 0; st < stageCount; st++)
+		{
+			DialogueTreeStage stage = new DialogueTreeStage();
+			if (!stage.OnRecieve(ctx)) return false;
+			Stages.Insert(stage);
+		}
+
 		int nodeCount;
 		if (!ctx.Read(nodeCount)) return false;
 		Nodes.Clear();
@@ -597,6 +911,11 @@ class DialogueTree
 			if (!node.OnRecieve(ctx)) return false;
 			Nodes.Insert(node);
 		}
+
+		if (!ctx.Read(AIPatrolID)) return false;
+		if (!ctx.Read(AIPatrolSubID)) return false;
+		if (!ctx.Read(ReputationVar)) return false;
+		if (!DialogueRepTierList.Read(ctx, ReputationTiers)) return false;
 
 		return true;
 	}
