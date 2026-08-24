@@ -38,13 +38,23 @@ folder.** No scripting, and no repacking for anything except voice audio.
   show the player's standing in the window
 - Multiple conversation trees per NPC, each unlocked by a completed quest
 - Per-response use limits, so players can't farm reputation by spamming a choice
+- A settings screen each player controls for themselves — the language they read
+  in, where the window sits, text size, and whether button icons show. Saved on
+  their machine and carried to any server running the mod; your colours, size and
+  font stay yours
+- Options can be shown *or hidden* by quest progress, and can offer or hand over
+  a specific quest straight from a conversation
+- Multi-language dialogue: every player reads the conversation in their own DayZ
+  language, or picks one in game. Translations sit beside your trees as overlay
+  files — nothing you already wrote has to change, and anything untranslated
+  falls back to your own wording. The mod's own text ships in 14 languages
 
 Source and releases: [github.com/ABTT-ESK/DayZ-DialogueFramework-Release](https://github.com/ABTT-ESK/DayZ-DialogueFramework-Release)
 
 ## Requirements
 
 - [DayZ Expansion](https://github.com/salutesh/DayZ-Expansion-Scripts)
-  (Core + Quests + AI)
+  (Core + Quests + Market + AI, or just the Expansion Bundle)
 - Community Framework (CF)
 
 ## Installation
@@ -99,6 +109,9 @@ $profile:\DialogFramework\
     AIPatrols.json             # Talkable AI patrols (with dialogue IDs)
   Factions\
     Factions.json              # Your custom AI factions
+  Localization\
+    README.txt                 # How translations work, written for you
+    german\*.json              # One folder per language you translate into
   PlayerState\                 # Per-player reputation / variables (auto)
 ```
 
@@ -126,8 +139,11 @@ options until you do. See [Updating](docs/UPDATING.md).
 | Guide | What's in it |
 |---|---|
 | [Config reference](docs/CONFIG_REFERENCE.md) | Every field of every config file, annotated. **Start here** |
+| [The screens](docs/SCREENS.md) | What each screen in the window is called, and which settings change its wording |
 | [Dialogue trees](docs/DIALOGUE_TREE_GUIDE.md) | Writing conversations: branching, quest gating, quest wording |
 | [Window appearance](docs/MENU_CONFIG_GUIDE.md) | Position presets, colours, font styles, custom layouts |
+| [Languages](docs/LANGUAGES.md) | Running your server in more than one language. **Start here** for translations |
+| [Translation file format](docs/CONFIG_REFERENCE.md#6-translations--localizationlanguagejson) | Every field and key, for hand-editing |
 | [Voice lines](#voice-lines) | Audio format, naming, publishing your voice pack |
 | [Updating](docs/UPDATING.md) | What happens to your configs when the mod updates |
 | [DialogueForge](https://github.com/ABTT-ESK/DialogueForge) | The visual editor for these config files |

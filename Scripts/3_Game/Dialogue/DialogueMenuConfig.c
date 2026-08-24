@@ -9,11 +9,54 @@ class DialogueMenuPosition
 	static const string BOTTOM_LEFT   = "BOTTOM_LEFT";
 	static const string BOTTOM_CENTER = "BOTTOM_CENTER";
 	static const string BOTTOM_RIGHT  = "BOTTOM_RIGHT";
+
+	protected static ref array<string> s_All = new array<string>;
+
+	static array<string> All()
+	{
+		if (s_All.Count() == 0)
+		{
+			s_All.Insert(TOP_LEFT);
+			s_All.Insert(TOP_CENTER);
+			s_All.Insert(TOP_RIGHT);
+			s_All.Insert(CENTER_LEFT);
+			s_All.Insert(CENTER);
+			s_All.Insert(CENTER_RIGHT);
+			s_All.Insert(BOTTOM_LEFT);
+			s_All.Insert(BOTTOM_CENTER);
+			s_All.Insert(BOTTOM_RIGHT);
+		}
+
+		return s_All;
+	}
+
+	static bool IsKnown(string position)
+	{
+		return All().Find(position) != -1;
+	}
+
+	//! "BOTTOM_CENTER" reads badly on a button. This does not go through the
+	//! stringtable on purpose -- it has to stay readable even on a client
+	//! where the mod's stringtable failed to load.
+	static string Label(string position)
+	{
+		if (position == TOP_LEFT) return "Top left";
+		if (position == TOP_CENTER) return "Top centre";
+		if (position == TOP_RIGHT) return "Top right";
+		if (position == CENTER_LEFT) return "Middle left";
+		if (position == CENTER) return "Middle";
+		if (position == CENTER_RIGHT) return "Middle right";
+		if (position == BOTTOM_LEFT) return "Bottom left";
+		if (position == BOTTOM_CENTER) return "Bottom centre";
+		if (position == BOTTOM_RIGHT) return "Bottom right";
+
+		return position;
+	}
 }
 
 class DialogueMenuConfig
 {
-	static const int CURRENT_VERSION = 3;
+	static const int CURRENT_VERSION = 6;
 	int ConfigVersion = 0;
 
 	string Position = DialogueMenuPosition.BOTTOM_CENTER;
@@ -42,6 +85,12 @@ class DialogueMenuConfig
 	string FontStyle = "DEFAULT";
 
 	bool ShowResponseIcons = false;
+
+	bool ShowLanguageButton = true;
+
+	bool ScaleTextWithPanel = false;
+
+	bool ShowErrorNotifications = true;
 
 	string LayoutOverride = "";
 
@@ -156,6 +205,21 @@ class DialogueMenuConfig
 			ShowResponseIcons = false;
 		}
 
+		if (ConfigVersion < 4)
+		{
+			ShowLanguageButton = true;
+		}
+
+		if (ConfigVersion < 5)
+		{
+			ScaleTextWithPanel = false;
+		}
+
+		if (ConfigVersion < 6)
+		{
+			ShowErrorNotifications = true;
+		}
+
 		ConfigVersion = CURRENT_VERSION;
 		return true;
 	}
@@ -254,6 +318,9 @@ class DialogueMenuConfig
 		rpc.Write(WindowBorderThickness);
 		rpc.Write(VisitedResponseOpacity);
 		rpc.Write(ShowResponseIcons);
+		rpc.Write(ShowLanguageButton);
+		rpc.Write(ScaleTextWithPanel);
+		rpc.Write(ShowErrorNotifications);
 
 		WriteColor(rpc, BackgroundColor);
 		WriteColor(rpc, ResponseBackgroundColor);
@@ -284,6 +351,9 @@ class DialogueMenuConfig
 		if (!ctx.Read(WindowBorderThickness)) return false;
 		if (!ctx.Read(VisitedResponseOpacity)) return false;
 		if (!ctx.Read(ShowResponseIcons)) return false;
+		if (!ctx.Read(ShowLanguageButton)) return false;
+		if (!ctx.Read(ScaleTextWithPanel)) return false;
+		if (!ctx.Read(ShowErrorNotifications)) return false;
 
 		if (!ReadColor(ctx, BackgroundColor)) return false;
 		if (!ReadColor(ctx, ResponseBackgroundColor)) return false;

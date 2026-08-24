@@ -19,6 +19,10 @@ class DialogueActionType
 	static const string RECRUIT_AI = "RECRUIT_AI";
 
 	static const string GO_HOSTILE = "GO_HOSTILE";
+
+	//! Opens the quest's offer screen -- description, items, accept/decline --
+	//! for the quest named in the response's QuestID.
+	static const string OFFER_QUEST = "OFFER_QUEST";
 }
 
 class DialogueVarOp
@@ -182,21 +186,35 @@ class DialogueRepTierList
 
 	static string LabelFor(array<ref DialogueRepTier> tiers, int value)
 	{
-		string label = "";
+		int index = LabelIndexFor(tiers, value);
+		if (index < 0)
+			return "";
+
+		return tiers[index].Label;
+	}
+
+	static int LabelIndexFor(array<ref DialogueRepTier> tiers, int value)
+	{
+		if (!tiers)
+			return -1;
+
+		int bestIndex = -1;
 		int best = 0;
-		bool found = false;
-		foreach (DialogueRepTier tier : tiers)
+
+		for (int i = 0; i < tiers.Count(); i++)
 		{
+			DialogueRepTier tier = tiers[i];
 			if (!tier)
 				continue;
-			if (value >= tier.Threshold && (!found || tier.Threshold >= best))
+
+			if (value >= tier.Threshold && (bestIndex == -1 || tier.Threshold >= best))
 			{
 				best = tier.Threshold;
-				label = tier.Label;
-				found = true;
+				bestIndex = i;
 			}
 		}
-		return label;
+
+		return bestIndex;
 	}
 }
 
@@ -373,6 +391,15 @@ class DialogueResponse
 	string Text;
 	int NextNodeID;
 	int RequiredQuestID = -1;
+
+	//! The mirror of RequiredQuestID: once THIS quest is completed the
+	//! response stops being offered. Lets a line retire itself.
+	int HideAfterQuestID = -1;
+
+	//! Which quest OFFER_QUEST / ACCEPT_QUEST act on. -1 means "whichever
+	//! quest the live quest-detail step is showing", the old behaviour.
+	int QuestID = -1;
+
 	string ActionType = DialogueActionType.NONE;
 
 	ref array<ref DialogueVarOp> RequiredVars;
@@ -391,6 +418,12 @@ class DialogueResponse
 	{
 		if (RequiredQuestID <= 0)
 			RequiredQuestID = -1;
+
+		if (HideAfterQuestID <= 0)
+			HideAfterQuestID = -1;
+
+		if (QuestID <= 0)
+			QuestID = -1;
 
 		if (ActionType == "")
 			ActionType = DialogueActionType.NONE;
@@ -420,6 +453,8 @@ class DialogueResponse
 		DialogueVarOpList.Write(rpc, SetVars);
 		rpc.Write(MaxUses);
 		rpc.Write(UsesKey);
+		rpc.Write(HideAfterQuestID);
+		rpc.Write(QuestID);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -432,6 +467,8 @@ class DialogueResponse
 		if (!DialogueVarOpList.Read(ctx, SetVars)) return false;
 		if (!ctx.Read(MaxUses)) return false;
 		if (!ctx.Read(UsesKey)) return false;
+		if (!ctx.Read(HideAfterQuestID)) return false;
+		if (!ctx.Read(QuestID)) return false;
 		return true;
 	}
 }
@@ -530,6 +567,8 @@ class DialogueTree
 	string ReputationVar = "";
 
 	ref array<ref DialogueRepTier> ReputationTiers;
+
+	string LocKey = "";
 
 	int RootNodeID;
 
@@ -732,6 +771,7 @@ class DialogueTree
 		rpc.Write(AIPatrolSubID);
 		rpc.Write(ReputationVar);
 		DialogueRepTierList.Write(rpc, ReputationTiers);
+		rpc.Write(LocKey);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -916,6 +956,7 @@ class DialogueTree
 		if (!ctx.Read(AIPatrolSubID)) return false;
 		if (!ctx.Read(ReputationVar)) return false;
 		if (!DialogueRepTierList.Read(ctx, ReputationTiers)) return false;
+		if (!ctx.Read(LocKey)) return false;
 
 		return true;
 	}

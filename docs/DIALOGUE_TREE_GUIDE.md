@@ -106,8 +106,11 @@ in it doesn't work) until you fix it.
 | `Text` | string | Button text shown to the player |
 | `NextNodeID` | int | Which node to go to next. Only used when `ActionType` is `"NONE"` (or omitted). `-1` (or omitted) ends the conversation |
 | `RequiredQuestID` | int | Optional gating — only show this response if that quest ID is `COMPLETED` for the player. `-1` (default) = no gating |
+| `HideAfterQuestID` | int | The mirror of the above — **hide** this response once that quest is `COMPLETED`. `-1` (default) = never hidden. Use both to give an option a window |
+| `QuestID` | int | Which quest `OFFER_QUEST` or `ACCEPT_QUEST` acts on. `-1` (default) means `ACCEPT_QUEST` falls back to the live quest-detail step, and `OFFER_QUEST` does nothing |
 | `ActionType` | string | See [Action types](#action-types) below |
 | `MaxUses` | int | Anti-farm: max times a player may pick this option, ever. `0` (default) = unlimited. After the limit the option disappears — stops reputation-farming by spamming the same choice. In DialogueForge, just set the number; it manages the counter for you |
+| `UsesKey` | string | The hidden per-player counter behind `MaxUses`. DialogueForge generates one when you set a limit — don't invent one, and never reuse the same key on two different options or they share a counter |
 
 ## Locking dialogue behind quests
 
@@ -588,6 +591,83 @@ For quest-detail steps specifically, the mod looks for voice lines named
 `Quest_<questID>_Start`, `Quest_<questID>_InProgress`, and
 `Quest_<questID>_Complete` automatically — you don't declare these
 anywhere, just add matching SoundSets if you want them voiced.
+
+## Pointing an option at a quest
+
+Two actions hand a specific quest to the player from any option you write.
+Both take the quest in the response's `QuestID`:
+
+- **`OFFER_QUEST`** opens that quest's own offer screen -- its description,
+  what it wants, what it pays, and the accept and decline buttons. This is
+  the one to reach for: the player reads it before committing.
+- **`ACCEPT_QUEST`** hands it straight over with no offer screen. Use it when
+  the conversation itself *is* the offer and the player has already said yes.
+
+`ACCEPT_QUEST` without a `QuestID` still means "the quest the live
+quest-detail step is showing", which is how the mod's own accept button
+works. Anywhere else it has nothing to accept, and says so in the log.
+
+> **Neither action can hand out a quest the player shouldn't have.** Before
+> anything is started, the mod checks the same rules Expansion uses for its
+> own quest list: already finished it (and it isn't repeatable), already on
+> it, on cooldown, prerequisites not met, achievement quest. If any of those
+> apply, the offer screen simply has no accept button, and `ACCEPT_QUEST`
+> refuses and logs why rather than starting it.
+>
+> The one rule deliberately **not** applied is "is this NPC the quest giver"
+> — that's the whole point of these actions. Any character can point a player
+> at a quest; they still can't skip the chain to get it.
+
+## Making an option go away again
+
+`RequiredQuestID` shows an option once a quest is **completed**.
+`HideAfterQuestID` is its mirror: the option disappears once that quest is
+completed.
+
+Use it to retire a line that has stopped making sense -- a greeting that
+points at the next quest giver shouldn't still be there once that job is
+done. Set both on one option and you get a window: appears after A, gone
+after B.
+
+Neither is a substitute for the other, and both are optional. An option with
+neither is always available.
+
+> Once you have more than a handful of these, open DialogueForge's **Server
+> files** tab and hit **Quest flow report**. It writes `QuestFlow.txt` listing
+> every quest your conversations mention -- what shows after it, what hides
+> after it, what offers it -- so you can look it up instead of remembering.
+> It also catches the two mistakes you cannot see in game: an option that
+> shows and hides on the same quest, and an `OFFER_QUEST` with no quest set.
+
+## Writing for more than one language
+
+Write your tree once, in whatever language you think in. A translation is a
+**separate overlay file**, so translating never means keeping two copies of a
+conversation in step.
+
+The short version:
+
+1. Open the tree in DialogueForge, go to the **Translations** tab, pick a
+   language, and work down the list.
+2. Save. It lands in `Localization\<language>\` in your profile folder.
+3. Restart the server and your client.
+
+Players get the translation matching their DayZ language automatically. Anyone
+whose language you haven't translated sees exactly what you wrote — and so does
+anyone whose language you've only half finished, line by line. There is no way
+for a missing translation to produce a blank line.
+
+Two things to keep in mind while writing:
+
+- **`%1` still works.** It's replaced with the player's name in a translated
+  line the same as an untranslated one, so keep it in your translations
+  wherever you had it in the original.
+- **Indexes matter.** A translation points at "response 2 of node 5", so
+  reordering responses after you've translated a tree shifts what those
+  translations point at. Open the Translations tab after reordering and it
+  re-reads the tree and lines everything back up before you save.
+
+Full file format and key reference: [Config reference §6](CONFIG_REFERENCE.md).
 
 ## Building large, deeply-branching trees
 

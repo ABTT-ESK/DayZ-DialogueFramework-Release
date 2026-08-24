@@ -21,6 +21,8 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 		Expansion_EnableRPCManager();
 		Expansion_RegisterClientRPC("RPC_SyncDialogueTrees");
 		Expansion_RegisterClientRPC("RPC_SyncPlayerVars");
+		Expansion_RegisterClientRPC("RPC_SyncDialogueLoc");
+		Expansion_RegisterServerRPC("RPC_RequestDialogueLoc");
 
 		Print("[DialogueFramework] [DIAG] RPC_SyncDialogueTrees registered.");
 	}
@@ -95,9 +97,92 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 
 		DialogueVars.GetInstance().GetServerState(identity.GetId()).OnSend(rpc);
 
+		array<string> languages = DialogueManager.GetInstance().GetLocalizationLanguages();
+		rpc.Write(languages.Count());
+		foreach (string language : languages)
+			rpc.Write(language);
+
 		rpc.Expansion_Send(true, identity);
 
-		Print("[DialogueFramework] Sent " + trees.Count() + " dialogue tree(s) to client UID=" + identity.GetId());
+		Print("[DialogueFramework] Sent " + trees.Count() + " dialogue tree(s) and " + languages.Count() + " translation language(s) to client UID=" + identity.GetId());
+	}
+
+	static void DialogueFW_RequestLanguage(string language)
+	{
+		if (!g_Game.IsClient())
+			return;
+
+		DialogueFrameworkSyncModule mod = DialogueFrameworkSyncModule.Cast(
+			CF_ModuleCoreManager.Get(DialogueFrameworkSyncModule));
+		if (mod)
+			mod.RequestLanguageFromServer(language);
+	}
+
+	void RequestLanguageFromServer(string language)
+	{
+		string wanted = DialogueFWLanguages.Normalize(language);
+
+		DialogueLoc loc = DialogueLoc.GetInstance();
+
+		if (!loc.ServerHasLanguage(wanted))
+		{
+			loc.ClearBundle();
+			loc.SetRequestedLanguage("");
+			Print("[DialogueFramework] [LOC] No translation on this server for '" + wanted + "' -- showing the dialogue as written.");
+			return;
+		}
+
+		if (loc.ActiveLanguage() == wanted)
+			return;
+
+		if (loc.UseCachedBundle(wanted))
+		{
+			Print("[DialogueFramework] [LOC] Switched to the already-downloaded '" + wanted + "' translation.");
+			return;
+		}
+
+		loc.SetRequestedLanguage(wanted);
+
+		auto rpc = Expansion_CreateRPC("RPC_RequestDialogueLoc");
+		rpc.Write(wanted);
+		rpc.Expansion_Send(true);
+
+		Print("[DialogueFramework] [LOC] Requested the '" + wanted + "' translation from the server.");
+	}
+
+	void RPC_RequestDialogueLoc(PlayerIdentity sender, Object target, ParamsReadContext ctx)
+	{
+		if (!g_Game.IsServer() || !sender)
+			return;
+
+		string wanted;
+		if (!ctx.Read(wanted))
+			return;
+
+		DialogueLocBundle bundle = DialogueManager.GetInstance().GetLocBundle(wanted);
+		if (!bundle)
+		{
+			Print("[DialogueFramework] [LOC] Client UID=" + sender.GetId() + " asked for '" + wanted + "' but the server has no such translation.");
+			return;
+		}
+
+		auto rpc = Expansion_CreateRPC("RPC_SyncDialogueLoc");
+		bundle.OnSend(rpc);
+		rpc.Expansion_Send(true, sender);
+
+		Print("[DialogueFramework] [LOC] Sent the '" + bundle.Language + "' translation (" + bundle.EntryCount() + " line(s)) to UID=" + sender.GetId());
+	}
+
+	void RPC_SyncDialogueLoc(PlayerIdentity sender, Object target, ParamsReadContext ctx)
+	{
+		DialogueLocBundle bundle = new DialogueLocBundle();
+		if (!bundle.OnRecieve(ctx))
+		{
+			Print("[DialogueFramework] [LOC] [ERROR] Could not read the translation sent by the server.");
+			return;
+		}
+
+		DialogueLoc.GetInstance().SetBundle(bundle);
 	}
 
 	void RPC_SyncDialogueTrees(PlayerIdentity sender, Object target, ParamsReadContext ctx)
@@ -161,6 +246,24 @@ class DialogueFrameworkSyncModule : CF_ModuleWorld
 		{
 			DialogueVars.GetInstance().SetClientState(varState);
 			Print("[DialogueFramework] Received " + varState.Names.Count() + " dialogue variable(s) from server.");
+		}
+
+		int languageCount;
+		if (ctx.Read(languageCount))
+		{
+			array<string> languages = new array<string>;
+			for (int l = 0; l < languageCount; l++)
+			{
+				string language;
+				if (!ctx.Read(language))
+					break;
+				languages.Insert(language);
+			}
+
+			DialogueLoc.GetInstance().SetServerLanguages(languages);
+			Print("[DialogueFramework] [LOC] Server offers " + languages.Count() + " translation language(s).");
+
+			RequestLanguageFromServer(DialogueLoc.GetInstance().EffectiveLanguage());
 		}
 
 		Print("[DialogueFramework] Received " + treeCount + " dialogue tree(s) from server.");

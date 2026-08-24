@@ -48,9 +48,17 @@ dialogue trees.
   "WindowBorderColor": [255, 255, 255, 255],
   "WindowBorderThickness": 2,
   "VisitedResponseOpacity": 0.4,
+  "FontStyle": "DEFAULT",
+  "ShowResponseIcons": false,
+  "ShowLanguageButton": true,
+  "ScaleTextWithPanel": false,
+  "ShowErrorNotifications": true,
   "LayoutOverride": ""
 }
 ```
+
+`ConfigVersion` is written in too — leave it alone. It's how the mod knows to
+add new settings to your file when you update, keeping everything you wrote.
 
 ## Position
 
@@ -179,8 +187,22 @@ decoration, background images — and ship it in your own addon.
 them:
 
 `DialoguePanel`, `DialoguePanelBackground`, `SpeakerName`, `SpeakerLine`,
-`ResponseScroll`, `ResponseList`, `CloseButton`, `ConfirmPanel`,
-`ConfirmText`, `ConfirmYesButton`, `ConfirmNoButton`
+`SpeakerLineScroll`, `ResponseScroll`, `ResponseList`, `CloseButton`,
+`SettingsButton`, `SettingsButtonLabel`, `SettingsButtonBackground`,
+`ConfirmPanel`, `ConfirmText`, `ConfirmYesButton`, `ConfirmYesLabel`,
+`ConfirmNoButton`, `ConfirmNoLabel`, `WindowBorder`, `RewardStrip`,
+`RewardStripLabel`, `RequiredStrip`, `RequiredStripLabel`
+
+**New in 1.3.0:** `SettingsButton` (and its two children), `ConfirmYesLabel`
+and `ConfirmNoLabel`. A layout copied from an older version still loads, but
+players lose the settings screen entirely, and the confirm buttons keep their
+baked-in English wording instead of following the player's language. Copy the
+current `dialogue_menu.layout` and re-apply your changes rather than patching
+an old copy.
+
+The option label in `dialogue_response_button.layout` must also be a
+`MultilineTextWidgetClass` with `wrap 1`, or long options are cut off at one
+line.
 
 If the override path fails to load, the mod logs an error to the client log
 and falls back to the built-in layout rather than showing a blank screen.
@@ -215,3 +237,88 @@ The icons follow your `ResponseTextColor`, so they match whatever theme you
 have set. Nothing to build; they ship with the mod.
 
 It's off by default. Leave it off and your menu looks exactly as it did.
+
+
+## How long options are sized
+
+A response button holds one line of text at your chosen font size. When an
+option is longer than that, it wraps and the button grows taller — up to three
+lines. Past three lines the text shrinks instead, so one rambling option can't
+swallow the whole list. Nothing is ever cut off, and a button never gets its
+own scrollbar.
+
+Short options are untouched: one line, the same 40px button as always.
+
+`"ScaleTextWithPanel": true` additionally ties the text size to `PanelWidth`,
+using `0.6` as the reference. A panel at `0.9` gets text 1.5× the size, one at
+`0.4` gets two thirds — clamped to between 0.6× and 1.8× so it can't go
+unreadable or absurd. It's **off by default**, so updating the mod changes
+nothing until you turn it on.
+
+`FontStyle` still sets the base size, and the two combine: `LARGE` on a wide
+panel is bigger than `LARGE` alone.
+
+> **Custom layouts:** the option label has to be a `MultilineTextWidgetClass`
+> with `wrap 1` for any of this to work. If your `LayoutOverride` uses a plain
+> `TextWidgetClass` the text will still be clipped to one line — copy the
+> widget block from `dialogue_response_button.layout`.
+
+## Telling players when something is wrong
+
+`"ShowErrorNotifications": true` (the default) puts a short pop-up on screen
+when an option can't do what it says — the same toast style Expansion uses.
+
+There are two kinds, and only one of them is an error:
+
+| What happened | What the player sees |
+|---|---|
+| They can't take that quest yet | *"You can't take that quest right now."* |
+| The option is misconfigured | *"That option isn't set up correctly. The server owner can find the reason in the log."* |
+
+The first is normal gameplay feedback and **always shows** — it's how a player
+learns they need to finish something else first.
+
+The second is the one this setting controls. Without it, a misconfigured
+option just closes the window and the player has no idea why — they'll assume
+your server is broken. With it, they know it isn't them, and you get a report.
+Set it to `false` if you'd rather players never saw it; the full reason goes to
+your log either way.
+
+## What players can change for themselves
+
+There's a small settings button in the corner of the conversation window, next
+to the close button. It opens a screen of preferences belonging to that player
+alone, saved on their machine and carried to any server running the mod:
+
+| Row | What it does |
+|---|---|
+| Language | Read in a language other than their game's. Only shown if you have translations |
+| Window position | Move the window to any of the nine spots |
+| Text size | 80%–150% of whatever your settings produce |
+| Button icons | Show or hide the hint icons |
+| Reset | Appears once they've changed something; puts it all back |
+
+**Your look is still yours.** They can move the window and scale the text, but
+not change your size, your colours, your font or your border — so a server
+with a carefully built theme keeps it. Position and text size are the two
+things that are genuinely about the player's screen rather than your design.
+
+Everything defaults to "server's choice", so a player who never opens this
+screen sees exactly what you configured.
+
+## The language choice
+
+`"ShowLanguageButton": true` (the default) puts a **Language** row on the
+player settings screen, reached from the settings button in the corner of the
+conversation window. It cycles through the player's own game language plus
+every language you have translations for, and their choice is remembered on
+their machine.
+
+It only ever appears if `Localization\` actually has translations in it, so a
+single-language server sees nothing regardless of this setting. Set it to
+`false` if you'd rather every player simply got their own game language with no
+option to change it.
+
+The settings screen is drawn from ordinary response buttons, so it takes your
+colours and font style with no extra work — including on a custom
+`LayoutOverride`.

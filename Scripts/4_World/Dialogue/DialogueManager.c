@@ -12,6 +12,7 @@ class DialogueManager
 	protected const string DIALOGUE_PROFILE_FOLDER = "$profile:\\DialogFramework\\Dialogues\\";
 	protected const string MENU_CONFIG_FILE = "$profile:\\DialogFramework\\MenuConfig.json";
 	protected const string QUEST_TEXT_FOLDER = "$profile:\\DialogFramework\\QuestText\\";
+	protected const string LOCALIZATION_FOLDER = "$profile:\\DialogFramework\\Localization\\";
 	protected const string SHARED_SUBFOLDER = "Shared";
 	protected const string NPC_FOLDER_PREFIX = "NPC_";
 	protected const string TRADER_FOLDER_PREFIX = "Trader_";
@@ -24,6 +25,188 @@ class DialogueManager
 
 	protected ref DialogueMenuConfig m_MenuConfig;
 	protected ref map<int, ref DialogueQuestText> m_QuestTexts = new map<int, ref DialogueQuestText>;
+
+	protected ref map<string, ref DialogueLocBundle> m_LocBundles = new map<string, ref DialogueLocBundle>;
+	protected ref array<string> m_LocLanguages = new array<string>;
+
+	array<string> GetLocalizationLanguages()
+	{
+		return m_LocLanguages;
+	}
+
+	DialogueLocBundle GetLocBundle(string language)
+	{
+		DialogueLocBundle bundle;
+		if (m_LocBundles.Find(DialogueFWLanguages.Normalize(language), bundle))
+			return bundle;
+
+		return null;
+	}
+
+	void LoadLocalizations()
+	{
+		m_LocBundles.Clear();
+		m_LocLanguages.Clear();
+
+		if (!FileExist(LOCALIZATION_FOLDER))
+		{
+			ExpansionStatic.MakeDirectoryRecursive(LOCALIZATION_FOLDER);
+			WriteLocalizationReadme();
+			Print("[DialogueFramework] [LOC] No translations folder found -- created " + LOCALIZATION_FOLDER);
+			return;
+		}
+
+		//! Held in a local first -- iterating a method's return value directly
+		//! is what blew up here once already.
+		array<string> languages = DialogueFWLanguages.All();
+		if (!languages)
+		{
+			LogIssue("Language list unavailable -- no translations were loaded.");
+			return;
+		}
+
+		foreach (string language : languages)
+		{
+			string folder = LOCALIZATION_FOLDER + language + "\\";
+
+			//! No FileExist check on the language folder -- the scan returns
+			//! nothing for one that isn't there, which is the same outcome
+			//! with one less thing to get wrong.
+			array<string> jsonFiles = ExpansionStatic.FindFilesInLocation(folder, ".json");
+			if (!jsonFiles || jsonFiles.Count() == 0)
+				continue;
+
+			DialogueLocBundle bundle = new DialogueLocBundle();
+			bundle.Language = language;
+
+			foreach (string fileName : jsonFiles)
+				LoadLocalizationFile(folder + fileName, language, bundle);
+
+			if (bundle.EntryCount() == 0)
+			{
+				LogIssue("Translation folder " + folder + " has .json file(s) but no usable lines -- check that each entry has a Key and a Text.");
+				continue;
+			}
+
+			m_LocBundles.Set(language, bundle);
+			m_LocLanguages.Insert(language);
+
+			Print("[DialogueFramework] [LOC] Loaded " + bundle.EntryCount() + " translated line(s) for '" + language + "'.");
+		}
+
+		if (m_LocLanguages.Count() == 0)
+			Print("[DialogueFramework] [LOC] No translations loaded -- every player sees the text exactly as written in the tree files.");
+	}
+
+	protected void LoadLocalizationFile(string path, string language, DialogueLocBundle bundle)
+	{
+		DialogueLocFile file = new DialogueLocFile();
+		JsonFileLoader<DialogueLocFile>.JsonLoadFile(path, file);
+
+		if (!file)
+		{
+			LogIssue("Could not parse translation file: " + path);
+			return;
+		}
+
+		file.Sanitize();
+
+		if (file.Language != "" && file.Language != language)
+			LogIssue(path + " declares Language '" + file.Language + "' but sits in the '" + language + "' folder -- the folder wins.");
+
+		foreach (DialogueLocTree locTree : file.Trees)
+		{
+			if (!locTree)
+				continue;
+
+			if (locTree.TreeFile == "" && locTree.TreeID <= 0)
+				LogIssue(path + " has a translation block with neither TreeFile nor TreeID -- it can never be matched to a dialogue tree and was skipped.");
+		}
+
+		bundle.Merge(file);
+	}
+
+	protected void WriteLocalizationReadme()
+	{
+		string path = LOCALIZATION_FOLDER + "README.txt";
+		FileHandle f = OpenFile(path, FileMode.WRITE);
+		if (f == 0)
+			return;
+
+		FPrintln(f, "DialogueFramework -- Translations");
+		FPrintln(f, "=============================================");
+		FPrintln(f, "");
+		FPrintln(f, "Your dialogue trees stay exactly as they are. Translations live here as");
+		FPrintln(f, "separate overlay files, one folder per language:");
+		FPrintln(f, "");
+		FPrintln(f, "  Localization\\german\\MyTrader.json");
+		FPrintln(f, "  Localization\\russian\\MyTrader.json");
+		FPrintln(f, "");
+		FPrintln(f, "Folder names must be one of:");
+		FPrintln(f, "  english, czech, german, russian, polish, hungarian, italian,");
+		FPrintln(f, "  spanish, french, chinese, japanese, portuguese, chinesesimp");
+		FPrintln(f, "");
+		FPrintln(f, "Each player automatically gets the translation matching their DayZ");
+		FPrintln(f, "language, and can pick a different one from the settings button in the");
+		FPrintln(f, "corner of the conversation window. Anything you haven't translated falls back to the");
+		FPrintln(f, "original wording in the tree file -- never to a blank line.");
+		FPrintln(f, "");
+		FPrintln(f, "File format:");
+		FPrintln(f, "  {");
+		FPrintln(f, "    \"ConfigVersion\": 1,");
+		FPrintln(f, "    \"Language\": \"german\",");
+		FPrintln(f, "    \"Trees\": [");
+		FPrintln(f, "      {");
+		FPrintln(f, "        \"TreeID\": 9999,");
+		FPrintln(f, "        \"TreeFile\": \"npc_9999/dialogue.json\",");
+		FPrintln(f, "        \"Entries\": [");
+		FPrintln(f, "          { \"Key\": \"node.1.SpeakerText\", \"Text\": \"Na, wen haben wir denn da?\" },");
+		FPrintln(f, "          { \"Key\": \"node.1.Responses.0\", \"Text\": \"Ich suche Arbeit.\" }");
+		FPrintln(f, "        ]");
+		FPrintln(f, "      }");
+		FPrintln(f, "    ],");
+		FPrintln(f, "    \"Quests\": [");
+		FPrintln(f, "      {");
+		FPrintln(f, "        \"QuestID\": 1,");
+		FPrintln(f, "        \"Entries\": [");
+		FPrintln(f, "          { \"Key\": \"quest.AcceptTexts.0\", \"Text\": \"Ich mache es.\" }");
+		FPrintln(f, "        ]");
+		FPrintln(f, "      }");
+		FPrintln(f, "    ]");
+		FPrintln(f, "  }");
+		FPrintln(f, "");
+		FPrintln(f, "TreeFile is the tree's path relative to the Dialogues folder, lowercase,");
+		FPrintln(f, "with forward slashes. It is matched first; TreeID is the fallback, so");
+		FPrintln(f, "renaming a tree file only costs you the translations of trees that share");
+		FPrintln(f, "an ID with another tree.");
+		FPrintln(f, "");
+		FPrintln(f, "Key formats:");
+		FPrintln(f, "  node.<nodeID>.SpeakerText          the line the character speaks");
+		FPrintln(f, "  node.<nodeID>.SpeakerLines.<i>     one of the node's alternate lines");
+		FPrintln(f, "  node.<nodeID>.Responses.<i>        one of the node's response buttons");
+		FPrintln(f, "  stage.<s>.node.<nodeID>....        the same, inside story stage <s>");
+		FPrintln(f, "  tree.<Field>.<i>                   one entry of a tree-level text list");
+		FPrintln(f, "                                     (QuestListTexts, NoQuestsTexts,");
+		FPrintln(f, "                                     NoQuestsBackTexts, NoQuestsLeaveTexts,");
+		FPrintln(f, "                                     QuestListBackTexts, OfferBackTexts,");
+		FPrintln(f, "                                     InProgressBackTexts, TurnInBackTexts,");
+		FPrintln(f, "                                     ReputationTiers)");
+		FPrintln(f, "  quest.<Field>.<i>                  one entry of a QuestText list");
+		FPrintln(f, "  quest.RewardSelectText             that quest's reward prompt");
+		FPrintln(f, "");
+		FPrintln(f, "Indexes are zero-based and count entries as written in the source file,");
+		FPrintln(f, "not as shown to the player. Reordering a list in the tree file means the");
+		FPrintln(f, "translations for that list need reordering too -- DialogueForge does this");
+		FPrintln(f, "for you, which is the easiest way to keep these files honest.");
+		FPrintln(f, "");
+		FPrintln(f, "The mod's own wording (Reward:, Confirm, Cancel, the built-in fallback");
+		FPrintln(f, "response lines) is already translated into all supported languages and");
+		FPrintln(f, "needs nothing from you.");
+
+		CloseFile(f);
+
+		Print("[DialogueFramework] [LOC] Created translations README: " + path);
+	}
 
 	DialogueQuestText GetQuestText(int questID)
 	{
@@ -217,6 +400,7 @@ class DialogueManager
 		LoadAllTrees();
 		LoadMenuConfig();
 		LoadQuestTexts();
+		LoadLocalizations();
 	}
 
 	DialogueTree GetTreeForTraderEntity(string traderID, string className, vector position)
@@ -476,6 +660,18 @@ class DialogueManager
 				if (seenIDs.Find(response.NextNodeID) == -1)
 					LogIssue(context + ": node " + checkNode.ID + " has a response (\"" + response.Text + "\") pointing at NextNodeID " + response.NextNodeID + ", which doesn't exist -- likely a typo.");
 			}
+
+			foreach (DialogueResponse questResponse : checkNode.Responses)
+			{
+				if (!questResponse)
+					continue;
+
+				if (questResponse.RequiredQuestID > 0 && questResponse.RequiredQuestID == questResponse.HideAfterQuestID)
+					LogIssue(context + ": node " + checkNode.ID + " has a response (\"" + questResponse.Text + "\") that shows after quest " + questResponse.RequiredQuestID + " and hides after the same quest -- it can never be seen.");
+
+				if (questResponse.ActionType == DialogueActionType.OFFER_QUEST && questResponse.QuestID <= 0)
+					LogIssue(context + ": node " + checkNode.ID + " has an OFFER_QUEST response (\"" + questResponse.Text + "\") with no QuestID -- it will just close the window.");
+			}
 		}
 	}
 
@@ -719,6 +915,16 @@ class DialogueManager
 		WriteLoadLog(treeCount, npcCount);
 	}
 
+	protected string TreeLocKey(string fullPath)
+	{
+		string relative = fullPath;
+
+		if (relative.IndexOf(DIALOGUE_PROFILE_FOLDER) == 0)
+			relative = relative.Substring(DIALOGUE_PROFILE_FOLDER.Length(), relative.Length() - DIALOGUE_PROFILE_FOLDER.Length());
+
+		return DialogueLocPath.Normalize(relative);
+	}
+
 	protected void LoadTreeFile(string fullPath, int folderNPCID, string folderTraderID, inout int treeCount, inout int npcCount)
 	{
 		if (ExpansionString.EndsWithIgnoreCase(fullPath, "AIPatrols.json"))
@@ -727,6 +933,7 @@ class DialogueManager
 		DialogueTree tree = new DialogueTree();
 		JsonFileLoader<DialogueTree>.JsonLoadFile(fullPath, tree);
 		tree.Sanitize();
+		tree.LocKey = TreeLocKey(fullPath);
 		DumpTreeDiagnostic(tree, "SERVER-LOAD (" + fullPath + ")");
 		ValidateTree(tree, fullPath);
 

@@ -1,0 +1,36 @@
+{
+    "ConfigVersion": 1,
+    "Language": "german",
+    "Trees": [
+        {
+            "TreeID": 9999,
+            "TreeFile": "npc_9999/dialogue.json",
+            "Entries": [
+                { "Key": "node.1.SpeakerText", "Text": "Sieh an, wer da hereinspaziert. Was brauchst du?" },
+                { "Key": "node.1.Responses.0", "Text": "Ich suche Arbeit." },
+                { "Key": "node.1.Responses.1", "Text": "Schon gut." },
+                { "Key": "node.1.Responses.2", "Text": "Mieses Wetter, was?" },
+                { "Key": "node.2.SpeakerText", "Text": "Sag ich doch. Seit Tagen kein Ende." },
+                { "Key": "node.2.Responses.0", "Text": "Wie auch immer..." },
+                { "Key": "node.1.SpeakerLines.0", "Text": "Schon wieder du?" },
+                { "Key": "tree.QuestListTexts.0", "Text": "Was muss erledigt werden?" },
+                { "Key": "tree.NoQuestsTexts.0", "Text": "Im Moment habe ich nichts fuer dich." },
+                { "Key": "tree.ReputationTiers.0", "Text": "Fremder" },
+                { "Key": "tree.ReputationTiers.1", "Text": "Bekannt" },
+                { "Key": "stage.0.node.1.SpeakerText", "Text": "Du hast es zurueck geschafft." },
+                { "Key": "stage.0.node.1.Responses.0", "Text": "Gerade so." }
+            ]
+        }
+    ],
+    "Quests": [
+        {
+            "QuestID": 1,
+            "Entries": [
+                { "Key": "quest.AcceptTexts.0", "Text": "Ich mache es." },
+                { "Key": "quest.DeclineTexts.0", "Text": "Diesmal nicht." },
+                { "Key": "quest.TurnInTexts.0", "Text": "Erledigt." },
+                { "Key": "quest.RewardSelectText", "Text": "Such dir was aus." }
+            ]
+        }
+    ]
+}

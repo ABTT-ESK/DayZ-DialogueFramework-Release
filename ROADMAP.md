@@ -34,9 +34,6 @@ of these" when the player will receive one. Needs a label to say so.
 **Item preview framing.** Reward thumbnails use a fixed camera, so unusually
 large or small items can sit awkwardly in their tile.
 
-**Localisation.** Dialogue text is written literally in the JSON. Supporting
-`#STR_` keys would let multi-language servers translate conversations.
-
 **Conditions beyond quest completion.** Responses can currently be gated on
 a completed quest. Gating on faction, reputation, items carried, or time of
 day would open up considerably more roleplay.

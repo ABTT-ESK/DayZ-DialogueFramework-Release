@@ -356,6 +356,44 @@ PanelWidgetClass DialogueMenuRoot {
       }
      }
     }
+    ButtonWidgetClass SettingsButton {
+     position 46 12
+     size 28 28
+     halign right_ref
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style Empty
+     {
+      PanelWidgetClass SettingsButtonBackground {
+       ignorepointer 1
+       color 0 0 0 0.7843
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style UIDefaultPanel
+      }
+      TextWidgetClass SettingsButtonLabel {
+       ignorepointer 1
+       color 1 1 1 1
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text "*"
+       font "gui/fonts/sdf_MetronLight24"
+       "bold text" 1
+       "exact text" 1
+       "exact text size" 16
+       "text halign" center
+       "text valign" center
+      }
+     }
+    }
     ButtonWidgetClass CloseButton {
      position 12 12
      size 28 28

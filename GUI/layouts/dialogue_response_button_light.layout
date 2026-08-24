@@ -19,7 +19,7 @@ ButtonWidgetClass DialogueResponseButton {
    vexactsize 0
    style UIDefaultPanel
   }
-  TextWidgetClass DialogueResponseButtonText {
+  MultilineTextWidgetClass DialogueResponseButtonText {
    ignorepointer 1
    color 0.8627 0.8627 0.8627 1
    position 0.02 0
@@ -34,6 +34,7 @@ ButtonWidgetClass DialogueResponseButton {
    "exact text size" 18
    "text halign" left
    "text valign" center
+   wrap 1
   }
   ImageWidgetClass DialogueResponseButtonIcon {
    visible 0

@@ -7,6 +7,151 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.3.0]
+
+### Added
+
+- **Your dialogue can now be written in more than one language.** Each player
+  reads the conversation in their own DayZ language automatically, and can pick
+  a different one from the player settings screen.
+  Translations live in `$profile:\DialogFramework\Localization\<language>\`,
+  one folder per language, and your tree files are never touched — a
+  translation is a separate overlay listing only the lines you've translated.
+  Anything you haven't translated (or a language you don't ship) falls back to
+  the wording in the tree, so a half-finished language is safe to go live with.
+  Supported folder names: `english`, `czech`, `german`, `russian`, `polish`,
+  `hungarian`, `italian`, `spanish`, `french`, `chinese`, `japanese`,
+  `portuguese`, `chinesesimp`.
+- **DialogueForge has a Translations tab** that writes those files for you —
+  pick a language, work down the list of every line in the open tree or quest
+  wording file, and save. It keeps the keys straight so you never hand-edit
+  them.
+- **The mod's own wording is translated into all 14 languages** — `Reward:`,
+  `Turn in:`, `Confirm` / `Cancel`, the reputation marker, and the built-in
+  fallback response lines (`I'll take it.`, `Not interested.`, and the rest).
+  This needs nothing from you: it follows each player's game language.
+- **A player settings screen**, reached from a small button in the corner of
+  the conversation window next to the close button. Everything on it belongs
+  to that player, is saved on their own machine, and follows them to any
+  server running the mod. Each row cycles when clicked:
+  - **Language** — read the conversation in a language other than the one
+    they play the game in. Only appears if your server has translations.
+  - **Window position** — move the window to any of the nine spots if yours
+    covers something they'd rather see. Your size and colours are kept.
+  - **Text size** — 80% to 150% of whatever your settings produce, for
+    players whose screen makes the default hard to read.
+  - **Button icons** — show or hide the hint icons regardless of your setting.
+  - **Reset to the server's settings** — appears once they've changed
+    anything, and puts everything back.
+- **`ShowLanguageButton` in `MenuConfig.json`** (default on) controls whether
+  the Language row appears on that screen. The rest of the settings are always
+  available. Language only ever shows when the server has translations.
+- **A response can now offer or hand over a specific quest.** Two ways, both
+  set with the response's new `QuestID` (the "Quest to use" picker in
+  DialogueForge):
+  - **`OFFER_QUEST`** opens that quest's own offer screen -- its description,
+    what it needs, what it pays, and accept/decline -- from any option you
+    write. This is the one to reach for.
+  - **`ACCEPT_QUEST`** now takes a quest too, and hands it straight over with
+    no offer screen.
+
+  Previously `ACCEPT_QUEST` only did anything inside the live quest-detail
+  step the mod builds itself; anywhere else it silently closed the window.
+  It now says so in the log instead of failing quietly. (Reported on the
+  Workshop -- thank you.)
+- **Players are told on screen when an option doesn't work**, instead of the
+  window just closing. A short pop-up in Expansion's own toast style says
+  either *"You can't take that quest right now"* (normal gating, always
+  shown) or *"That option isn't set up correctly"* (a config mistake). The
+  detailed reason still goes to the log. Turn the second kind off with
+  `"ShowErrorNotifications": false` in `MenuConfig.json` if you'd rather
+  players never saw it.
+- **Neither quest action can hand out a quest the player shouldn't have.**
+  `OFFER_QUEST` and `ACCEPT_QUEST` check the same rules Expansion applies to
+  its own quest list before starting anything — already completed, already in
+  progress, on cooldown, prerequisites unmet, achievement quests. The offer
+  screen drops its accept button when the player isn't eligible, and
+  `ACCEPT_QUEST` refuses and says why in the log. The one rule deliberately
+  skipped is "is this NPC the giver", since pointing a player at another
+  character's quest is what these actions are for.
+- **`HideAfterQuestID` on a response**, the mirror of `RequiredQuestID`: the
+  option disappears once that quest is completed. Lets a line retire itself,
+  so "go and see Mikhail about the mill" stops being offered once the mill
+  is dealt with. Both can be used on the same option to give it a window:
+  appears after one quest, gone after another.
+- **A quest flow report** in DialogueForge, on the Server files tab. Writes
+  `QuestFlow.txt` listing every quest your conversations mention, by quest
+  and by conversation, so you don't have to remember which option shows
+  after 102 and hides after 105. It also flags the mistakes that are
+  invisible in game: an option that shows and hides on the same quest and so
+  can never appear, an `OFFER_QUEST` with no quest picked, and any quest id
+  that isn't in your quest folder. The same checks run in "Check ALL config
+  files" and in the server's own `LoadLog.txt`.
+- **`ScaleTextWithPanel` in `MenuConfig.json`** makes response text follow your
+  panel width, so a scaled-up menu gets proportionally bigger text and a
+  compact one still shows every option in full, just smaller.
+  **It ships switched off** so nothing about your current menu changes when you
+  update — turn it on in `MenuConfig.json`, or tick "Option text scales with
+  panel size" on DialogueForge's Menu appearance tab, if you want it.
+
+- **The screens now have agreed names**, listed in
+  [`docs/SCREENS.md`](docs/SCREENS.md). There are eleven, and each is named
+  after the config field that controls its wording -- `TurnInTexts` belongs to
+  the quest turn-in screen, `NoQuestsTexts` to the no-quests screen. Three
+  different sets of names were in use before (the quest wording tab, the live
+  preview and the logs all disagreed), which made it hard to tell anyone where
+  to look. DialogueForge's tab headings and preview titles now use these names,
+  and the client log announces each screen as it opens:
+  `[DialogueFramework] [SCREEN] Quest turn-in screen`
+
+### Fixed
+
+- **Options that grew onto a second line drew on top of the option below.**
+  The list only laid itself out once, at the old fixed height, so a button
+  that grew afterwards overlapped its neighbour. The list is now re-flowed
+  after it is built.
+- **The mod's own wording falls back to English if `stringtable.csv` is
+  missing from the built PBO**, instead of showing raw keys like
+  `STR_DIALOGUEFW_HEAD_REWARD` to players. It says so once in the client log
+  so the packing mistake is obvious. (Automatic language detection still
+  cannot work without the table — the player settings screen is unaffected
+  and still switches languages by hand.)
+- **Long response options are no longer cut off.** Response buttons were a
+  single line of text in a fixed-height button, so anything wider than the
+  button was clipped mid-sentence — while the same text on the NPC's own line
+  wrapped fine. Options now wrap and the button grows to fit, up to three
+  lines; past that the text shrinks instead, down to a readable floor. Nothing
+  is ever truncated, and no scrollbars appear inside a button. Short options
+  look exactly as they did.
+  - There was never a character limit to raise: it was a *pixel width* limit,
+    which is why it moved around with your panel width and font style.
+
+### Changed
+
+- `MenuConfig.json` is version 6. Existing files are upgraded in place on the
+  next server start with the new fields added and everything else left alone.
+- `dialogue_response_button.layout` now uses a `MultilineTextWidgetClass` for
+  the option label. **If you ship a custom `LayoutOverride`**, copy that change
+  across or your options will keep being cut off — a plain `TextWidgetClass`
+  cannot wrap.
+
+---
+
+## [1.2.1]
+
+### Fixed
+- **Quest item previews now show "Turn in:" and "Reward:" labels** so players can
+  tell what a quest is asking for versus what it pays out. (The labels existed but
+  were collapsed to zero height by a sizing bug and never showed — now fixed, and
+  the reward strip was previously unlabelled entirely.)
+- **`%1` now fills in the player's name throughout the window.** Placeholders
+  like `%1` in NPC lines, response buttons, greetings, and Expansion quest
+  titles/descriptions are replaced with the player's name (and localised
+  `#STR_...` text is resolved), the same way Expansion's own quest menu does it —
+  previously they showed up as a raw `%1`.
+
+---
+
 ## [1.2.0]
 
 ### Added

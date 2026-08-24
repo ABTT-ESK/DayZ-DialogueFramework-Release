@@ -80,7 +80,23 @@ field** shown and explained inline.
           "Text": "Any news from the outpost?",
           "NextNodeID": 3,
           "RequiredQuestID": 42,            // <<<<< HIDDEN until quest 42 is COMPLETED for this player. This is how you lock story topics
+          "HideAfterQuestID": 47,           // <<<<< And GONE again once quest 47 is completed. Use both to give an option a window; use either on its own
           "ActionType": "NONE"
+        },
+        {
+          "Text": "Tell me about the barn.",
+          "NextNodeID": -1,
+          "RequiredQuestID": -1,
+          "ActionType": "OFFER_QUEST",      // <<<<< Opens ONE quest's offer screen -- description, items, accept/decline
+          "QuestID": 102                    // <<<<< Which quest. Required for OFFER_QUEST; optional for ACCEPT_QUEST
+        },
+        {
+          "Text": "Here, take this.",
+          "NextNodeID": 1,
+          "RequiredQuestID": -1,
+          "ActionType": "NONE",
+          "MaxUses": 1,                     // <<<<< Anti-farm. How many times ONE player may ever pick this. 0 (or omitted) = unlimited
+          "UsesKey": "uses_a1b2c3d4"        // <<<<< The hidden per-player counter for MaxUses. DialogueForge generates it -- don't invent or reuse one by hand
         }
       ]
     },
@@ -114,11 +130,13 @@ field** shown and explained inline.
 |---|---|
 | `"NONE"` | Navigate to `NextNodeID`. If that's `-1`, ends the conversation |
 | `"SHOW_QUEST_LIST"` | Opens the live quest list for this NPC |
-| `"ACCEPT_QUEST"` | Accepts the quest being viewed. Only meaningful inside the live quest-detail step |
+| `"OFFER_QUEST"` | Opens one specific quest's offer screen. Needs `QuestID` |
+| `"ACCEPT_QUEST"` | Hands over the quest in `QuestID` with no offer screen. Without a `QuestID`, accepts the quest being viewed, which only works inside the live quest-detail step |
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
 | `"TURN_IN_QUEST"` | Hands in the quest being viewed. Opens the reward picker if the quest requires a choice |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes |
 | `"OPEN_TRADER"` | Traders only. Closes dialogue and opens the market menu |
+| `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. Respects Expansion's recruit settings; add a `RequiredQuestID` to lock it behind a quest |
 
 ## All `Type` values
 
@@ -268,6 +286,9 @@ no back button. `NoQuestsBackTexts` serves the no-quests screen.
 
   "FontStyle": "DEFAULT",               // <<<<< Built-in font and text size preset: DEFAULT, LIGHT, LARGE or COMPACT. No repacking needed
   "ShowResponseIcons": false,           // <<<<< true adds a small hint icon on the right of each button: exit / cart / speech bubble
+  "ShowLanguageButton": true,           // <<<<< Lets players pick which language they read the dialogue in. Only ever appears if you have translations installed -- see section 6
+  "ScaleTextWithPanel": false,          // <<<<< OFF by default so updating changes nothing. true makes response text follow PanelWidth, so a bigger menu gets bigger text and a compact one shrinks to fit
+  "ShowErrorNotifications": true,       // <<<<< A short on-screen pop-up when an option is misconfigured, so a player isn't left staring at a window that closed for no reason. The full reason goes to your log either way
   "LayoutOverride": ""                  // <<<<< Empty = use the built-in window. Set a path to YOUR OWN .layout file for anything the presets can't do. See MENU_CONFIG_GUIDE.md
 }
 ```
@@ -375,12 +396,108 @@ Notes:
 
 ---
 
-# 6. When changes take effect
+# 6. Translations — `Localization\<language>\*.json`
+
+> **New to this?** Read [LANGUAGES.md](LANGUAGES.md) first — it explains how
+> players get their own language and walks through the setup. This section is
+> the field-by-field reference for hand-editing the files.
+
+Your tree and quest-wording files stay in whatever language you wrote them in.
+A translation is a **separate overlay file** listing only the lines you have
+translated, so nothing you already built has to be duplicated or re-saved.
+
+One folder per language, named exactly one of:
+
+```
+english   czech    german     russian    polish       hungarian   italian
+spanish   french   chinese    japanese   portuguese   chinesesimp
+```
+
+(Those are the columns DayZ itself uses. `chinese` is traditional,
+`chinesesimp` is simplified.)
+
+```jsonc
+{
+  "ConfigVersion": 1,
+  "Language": "german",              // <<<<< optional; the folder name wins
+  "Trees": [
+    {
+      "TreeID": 9999,                // <<<<< the tree's own ID, used as a fallback match
+      "TreeFile": "npc_9999/dialogue.json", // <<<<< path under Dialogues\, lowercase, forward slashes — matched first
+      "Entries": [
+        { "Key": "node.1.SpeakerText", "Text": "Sieh an, wer da hereinspaziert." },
+        { "Key": "node.1.Responses.0", "Text": "Ich suche Arbeit." }
+      ]
+    }
+  ],
+  "Quests": [
+    {
+      "QuestID": 1,
+      "Entries": [
+        { "Key": "quest.AcceptTexts.0", "Text": "Ich mache es." }
+      ]
+    }
+  ]
+}
+```
+
+A single file can hold as many trees and quests as you like, and a language
+folder can hold as many files as you like — they are all merged. DialogueForge
+writes one file per tree, named after the tree's path.
+
+## Key formats
+
+| Key | What it translates |
+|---|---|
+| `node.<id>.SpeakerText` | The line that node's character speaks |
+| `node.<id>.SpeakerLines.<i>` | One of that node's alternate lines |
+| `node.<id>.Responses.<i>` | One of that node's response buttons |
+| `stage.<s>.node.<id>....` | The same, inside story tree `<s>` (zero-based) |
+| `tree.<Field>.<i>` | One entry of a tree-level text list |
+| `tree.ReputationTiers.<i>` | One reputation tier label |
+| `quest.<Field>.<i>` | One entry of a `QuestText` list |
+| `quest.RewardSelectText` | That quest's reward prompt |
+
+`<Field>` is the JSON field name exactly as it appears in the source file —
+`QuestListTexts`, `NoQuestsBackTexts`, `AcceptTexts`, and so on. All indexes
+are zero-based and count entries **as written in the source file**, not as
+shown to the player (a response hidden by a quest gate still occupies its
+index).
+
+## How a player gets a language
+
+1. The client detects its DayZ language and asks the server for that
+   translation. If the server doesn't have it, the player sees the original
+   wording — nothing breaks.
+2. The player can override that from the **Language** button in the
+   conversation window. Their choice is remembered on their own machine and
+   applies on every server. Set `ShowLanguageButton` to `false` in
+   `MenuConfig.json` to hide it. The button never appears on a server with no
+   translations installed.
+
+Any key you leave out — or a whole tree you never translate — falls back to the
+source wording line by line, so a half-finished language is safe to go live
+with.
+
+**The mod's own wording is already translated** into all 14 languages and needs
+nothing from you: `Reward:`, `Turn in:`, `Confirm` / `Cancel`, the reputation
+marker, and the built-in fallback responses (`I'll take it.`, `Not interested.`,
+`Here you go.`, and the rest) follow each player's game language.
+
+> Reordering a list in a tree file shifts every index after it, so the
+> translations for that list need reordering too. The Translations tab in
+> DialogueForge re-reads the tree every time you open it and keeps the keys
+> straight, which is why hand-editing these files is the harder path.
+
+---
+
+# 7. When changes take effect
 
 | Changed | Needs |
 |---|---|
 | Dialogue tree `.json` | Server restart + **full client restart** |
 | `MenuConfig.json` | Server restart + **full client restart** |
+| `Localization\...` | Server restart + **full client restart** |
 | Voice `.ogg` files | Repack and republish the voice pack |
 
 Both configs are pushed to clients when they connect, so a reconnect alone
@@ -391,6 +508,7 @@ won't pick up changes — the client process has to restart.
 | Symptom | Where to look |
 |---|---|
 | A tree didn't load | `Dialogues\LoadLog.txt` |
+| A translation isn't showing | Server log — `[LOC]` lines say what loaded per language; client log — `[LOC] Detected game language` and `Active translation` |
 | An NPC has no buttons | `LoadLog.txt`, then check `RequiredQuestID` on that node |
 | A voice line is silent | Client log — `[VOICE-AUDIT]` lists every missing sound set by name |
 | Window in the wrong place | Client log — `[UI] Panel placed at X, Y (PRESET)` |
