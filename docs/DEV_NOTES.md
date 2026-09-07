@@ -98,6 +98,31 @@ Expansion module you reference must be listed there or your scripts can be
 compiled first, and its classes resolve as unknown types. `#ifdef` guards do
 not fix this — the define can be visible while the class isn't yet.
 
+**`string.Length()` and `Substring()` count BYTES, not characters.** DayZ
+provides `LengthUtf8()` and `SubstringUtf8()` precisely because of this, and
+Expansion's chat wrapping uses them. Anything that measures *displayed* text
+must use the UTF-8 variants: `SetSpeakerLine` and `ResponseLinesNeeded` divide a
+length by a per-line **character** budget, so measuring bytes made every
+Cyrillic line count double and every CJK line treble -- speaker areas reserved
+twice the height they needed and response buttons ran the font-shrink loop down
+to the minimum for no reason. `ShortenForTile` is worse: a byte `Substring` can
+cut a multi-byte character in half and leave a broken glyph. Path and key
+handling (`DialogueLocPath.Normalize`) is ASCII and can stay on the byte calls.
+
+**The game's JSON reader stops at 1023 bytes per string** (a 1024 buffer minus
+its terminator). Measured in game with the `NPC_196` test tree: lines authored
+at 1223, 1711, 2008 and 2269 bytes all arrived as exactly 1023 bytes / 586
+characters. It is *not* the RPC -- `CheckLineLength` runs server-side after
+`JsonFileLoader` and already sees 1023, so the text is lost before the mod ever
+touches it.
+
+That has a consequence worth keeping straight: **the mod cannot warn that a
+line is too long**, because the original length is unrecoverable by the time it
+can look. `LINE_BYTES_LIMIT` (1023) only lets it spot the *signature* -- a line
+sitting exactly on the limit was almost certainly cut -- and report the damage.
+DialogueForge reads the JSON itself, so it is the only place that can warn in
+time; its `LINE_BYTES_LIMIT` / `LINE_BYTES_CLOSE` must stay in step with this.
+
 **EnforceScript aliases string temporaries.** Two freshly-returned strings
 used in one expression can end up as the same value. Passing two accessor
 calls straight into one formatting call made every settings row read
@@ -163,10 +188,33 @@ collection index before turning in, mirroring the stock menu (the first
 
 ## Quest actions on a response
 
-`ACCEPT_QUEST` and `OFFER_QUEST` both read the response's `QuestID`
-(`-1` = "whichever quest the live quest-detail step is on"). `OFFER_QUEST`
-builds the quest's own offer screen from any node; `ACCEPT_QUEST` hands the
-quest over with no offer screen.
+`ACCEPT_QUEST`, `OFFER_QUEST` and `TURN_IN_QUEST` all read the response's
+`QuestID` (`-1` = "whichever quest the live quest-detail step is on").
+`OFFER_QUEST` builds the quest's own offer screen from any node;
+`ACCEPT_QUEST` hands the quest over with no offer screen; `TURN_IN_QUEST`
+runs the hand-in.
+
+`TurnInQuestByID()` is the mirror of the accept-by-id path. It resolves the
+config, reads the player's state through `GetPlayerQuestState()`
+(`GetClientQuestData()`, `NONE` when the client has no quest data yet), and
+requires exactly `ExpansionQuestState.CAN_TURNIN` before setting
+`m_ActiveQuestID` and falling into the existing `TurnInActiveQuest()` — the
+objective-item picker, the reward picker and the turn-in RPC all read
+`m_ActiveQuestID`, so the by-id path reuses every one of them rather than
+duplicating the flow. Expansion validates a turn-in on quest **state**, not on
+proximity to the turn-in NPC (the turn-in ID only drives a completion emote),
+so a by-id hand-in from any character is accepted server-side.
+
+**`SHOW_QUEST_LIST` is guarded on `m_NPCID`.** A trader or friendly-AI
+conversation opens with an NPC ID of `-1`. Expansion's
+`QuestDisplayConditions` only filters by giver/turn-in NPC when the id is
+`> -1`, so passing `-1` through `GetAvailableQuestsForNPC()` returned **every
+quest the player was eligible for, server-wide, in no order**.
+`GetAvailableQuestsForNPC()` and `QuestBelongsToThisNPC()` now both return
+empty/false when `m_NPCID <= 0` and log why. Note this is the opposite of the
+deliberate `-1` passed *into* `QuestDisplayConditions` below — there it means
+"skip the giver rule for one named quest", here it would mean "match no NPC
+and therefore all of them".
 
 `CanPlayerTakeQuest()` guards both. It calls Expansion's own
 `QuestDisplayConditions(quest, player, questData, -1, false)` — **passing `-1`
@@ -181,6 +229,16 @@ refuses and logs why.
 Before 1.3.0 `ACCEPT_QUEST` silently closed the window anywhere outside the
 quest-detail step. It now logs the reason instead of failing quietly — if you
 add another action, follow the same shape.
+
+`RefuseTurnIn(questID, state)` owns every refusal, and **the message follows
+the state**: `COMPLETED` -> "You've already handed that one in.", `STARTED` ->
+"You haven't finished that yet.", anything else -> "You haven't taken that one
+on.". The first version used the STARTED wording for all three, which told a
+player who had just completed a quest that they had not finished it -- it reads
+as a mod bug rather than as an answer. If you add a state, add its wording here;
+a wrong-but-plausible message costs more than a vague one. Each string is
+assigned to its own local first: **EnforceScript aliases string temporaries**,
+so building the key and the fallback inline would let them clobber each other.
 
 **Player-facing failures go through `NotifyPlayer(key, fallback, isError)`.**
 `isError = true` means a config mistake and is suppressed by
@@ -524,10 +582,18 @@ The spawner remaps: if a patrol's `Faction` matches a registry name, it rewrites
 Expansion's own `Create` picks up our slot class. Player-stance mapping was
 verified against `eAIBase.PlayerIsEnemy` / `eAIPlayerTargetInformation`: FRIENDLY
 → `IsFriendlyEntity` true; GUARD → `IsGuard` true (tolerant until you raise a
-weapon); HOSTILE → both false. Registry is server-only (JSON lives in the
-profile); client `GetName()` would return the slot suffix, so
-`DialogueFW_SpeakerName` suppresses any name starting with the slot prefix and
-lets the tree's own speaker name show.
+weapon); HOSTILE → both false. Registry is server-only (`DialogueFW_FactionRegistry.Load()` runs in
+`DialogueMissionServerInit`, and the JSON lives in the profile). On the client
+`GetDef()` is therefore null and `eAIFaction.GetName()` falls back to
+`Type().ToString()` minus its first 10 characters -- `eAIFactionDialogueFW0`
+becomes `DialogueFW0` -- so `DialogueFW_SpeakerName` suppresses it.
+
+**The practical consequence: a talkable AI has a BLANK speaker name.** There is
+nothing to fall back to -- `DialogueTree` carries no speaker-name field, so the
+window title is empty for every AI conversation. Quest NPCs and traders are
+unaffected (they pass a real name in). Giving an AI a name would mean adding a
+name to the tree and a Forge field for it; until then, write the AI's name into
+its opening line if players need to know who they are talking to.
 
 ## Credits
 

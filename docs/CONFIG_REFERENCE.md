@@ -88,7 +88,7 @@ field** shown and explained inline.
           "NextNodeID": -1,
           "RequiredQuestID": -1,
           "ActionType": "OFFER_QUEST",      // <<<<< Opens ONE quest's offer screen -- description, items, accept/decline
-          "QuestID": 102                    // <<<<< Which quest. Required for OFFER_QUEST; optional for ACCEPT_QUEST
+          "QuestID": 102                    // <<<<< Which quest. Required for OFFER_QUEST; optional for ACCEPT_QUEST and TURN_IN_QUEST
         },
         {
           "Text": "Here, take this.",
@@ -129,11 +129,11 @@ field** shown and explained inline.
 | Value | What it does |
 |---|---|
 | `"NONE"` | Navigate to `NextNodeID`. If that's `-1`, ends the conversation |
-| `"SHOW_QUEST_LIST"` | Opens the live quest list for this NPC |
+| `"SHOW_QUEST_LIST"` | Opens the live quest list for this NPC. **Quest NPCs only** — a trader or AI has no quest-giver ID, so it shows nothing and says so in the log. Use `OFFER_QUEST` there |
 | `"OFFER_QUEST"` | Opens one specific quest's offer screen. Needs `QuestID` |
 | `"ACCEPT_QUEST"` | Hands over the quest in `QuestID` with no offer screen. Without a `QuestID`, accepts the quest being viewed, which only works inside the live quest-detail step |
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
-| `"TURN_IN_QUEST"` | Hands in the quest being viewed. Opens the reward picker if the quest requires a choice |
+| `"TURN_IN_QUEST"` | Hands in the quest in `QuestID`, from any character — a trader included. Opens the reward picker if the quest requires a choice. Without a `QuestID`, hands in the quest being viewed, which only works inside the live quest-detail step |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes |
 | `"OPEN_TRADER"` | Traders only. Closes dialogue and opens the market menu |
 | `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. Respects Expansion's recruit settings; add a `RequiredQuestID` to lock it behind a quest |

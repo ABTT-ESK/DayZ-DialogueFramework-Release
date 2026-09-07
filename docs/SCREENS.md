@@ -23,13 +23,13 @@ other.
 | Screen | The player gets there by | You change its wording with |
 |---|---|---|
 | **Conversation screen** | Talking to an NPC, trader or talkable AI | The nodes and options you write |
-| **Quest list screen** | An option with `SHOW_QUEST_LIST` | `QuestListTexts`, `QuestListBackTexts` |
+| **Quest list screen** | An option with `SHOW_QUEST_LIST`, on a quest NPC | `QuestListTexts`, `QuestListBackTexts` |
 | **No-quests screen** | Asking for work when there is none | `NoQuestsTexts`, `NoQuestsBackTexts`, `NoQuestsLeaveTexts` |
 | **Quest offer screen** | Picking a quest they haven't started, or an option with `OFFER_QUEST` | `AcceptTexts`, `DeclineTexts`, `OfferBackTexts` |
 | **Cooldown screen** | Picking a daily or weekly quest that isn't ready yet | `NotYetTexts`, `OfferBackTexts` |
 | **Quest in-progress screen** | Picking a quest they've accepted but not finished | `InProgressTexts`, `InProgressBackTexts` |
-| **Quest turn-in screen** | Picking a quest they've finished | `TurnInTexts`, `NotYetTexts`, `TurnInBackTexts` |
-| **Item choice screen** | Handing in a quest that accepts any one of several items | Nothing — built from the quest |
+| **Quest turn-in screen** | Picking a quest they've finished. An option with `TURN_IN_QUEST` skips straight past this to the hand-in itself | `TurnInTexts`, `NotYetTexts`, `TurnInBackTexts` |
+| **Item choice screen** | Handing in a quest that accepts any one of several items, however the hand-in was reached | Nothing — built from the quest |
 | **Reward choice screen** | Handing in a quest that lets them pick a reward | `RewardSelectText` |
 | **Reward confirm box** | Double-clicking a reward | Nothing — built in, translated |
 | **Player settings screen** | The settings button in the window corner | Nothing — it's the player's own |

@@ -18,7 +18,10 @@ folder.** No scripting, and no repacking for anything except voice audio.
 - Per-quest accept / decline / turn-in wording, so every quest reads in its
   own voice
 - Responses can be locked behind quest completion
-- Live quest list per NPC, always reflecting real quest state
+- Live quest list per quest NPC, always reflecting real quest state
+- Point a single option at one specific quest — offer it, hand it over, or
+  take it back when it's done — so a **trader can run a whole quest end to
+  end**, no quest list needed
 - Reward picker with item previews for quests that let players choose
 - Window position, size, colours and font all configurable per server
 - Optional voice lines, with a talking animation on AI NPCs

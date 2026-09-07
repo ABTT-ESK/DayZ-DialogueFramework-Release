@@ -127,6 +127,40 @@ that can quietly go wrong:
 
 ---
 
+## Keep long lines short enough to survive translation
+
+**The game reads at most 1023 bytes of any one line.** Anything past that is
+silently thrown away when your file is loaded — you get no error, the sentence
+just stops.
+
+It is a limit in **bytes**, not letters, and that is what makes it bite
+translators. A plain English letter costs one byte, a Russian or Greek letter
+costs two, and a Chinese or Japanese one costs three. So the same 1023 bytes is
+roughly:
+
+| Language | Characters that fit |
+|---|---|
+| English and other plain Latin | about **1000** |
+| Russian, Ukrainian, Greek | about **500** |
+| Chinese, Japanese, Korean | about **340** |
+
+A line you wrote comfortably in English can therefore be **cut off once it is
+translated**, without you changing a word of it. Keep any single line under
+about **500 characters** if you intend to translate it at all.
+
+You do not have to count them yourself:
+
+- **DialogueForge** counts the bytes under the box as you type, turning amber
+  as you approach the limit (or when a translation would cross it) and red when
+  the line will definitely be cut. This is the one that can save you, because
+  it sees your file before the game does.
+- **The server** notes in `LoadLog.txt` any line that arrives sitting exactly on
+  the limit, which means it has already been cut. By then the rest of the
+  sentence is gone, so treat that as a report of damage, not a warning.
+
+If a line is too long, split it across two nodes, or give the node several
+alternate lines instead of one long one. It reads better anyway.
+
 ## The one gotcha: editing after translating
 
 A translation points at a line by its position — "the second option on node

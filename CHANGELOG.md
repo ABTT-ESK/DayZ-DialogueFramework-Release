@@ -7,6 +7,53 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.4.0]
+
+### Added
+
+- **An option can now hand a finished quest back in.** `TURN_IN_QUEST` takes a
+  quest in the response's `QuestID`, the same way `OFFER_QUEST` and
+  `ACCEPT_QUEST` already did, so the hand-in can happen at any character
+  instead of only inside the quest list the mod builds itself. If the quest
+  gives a choice of reward, the reward picker opens as usual. Left without a
+  `QuestID` it behaves exactly as before.
+- **A trader can now run a whole quest, start to finish.** Traders have no
+  quest-giver identity, so they can never show a quest list — but they can
+  give a quest with `OFFER_QUEST` and take it back with `TURN_IN_QUEST`, one
+  option per quest. Add `RequiredQuestID` and `HideAfterQuestID` and the
+  options swap over on their own as the player gets further in.
+- **A refused hand-in now says which reason it is** — hasn't taken the quest,
+  hasn't finished it, or has already handed it in. Nothing changes in any of
+  those cases, and all three messages are translated into all 14 languages.
+
+### Fixed
+
+- **Long lines were mis-measured in every language that isn't plain English.**
+  The game counts text in bytes, and a Russian letter costs two of them while a
+  Chinese one costs three — but the window was sizing text as though every byte
+  were a letter. Speaker areas reserved roughly double the height they needed in
+  Russian and treble in Chinese, response buttons shrank their font to the
+  minimum for no reason, and a long item name on a reward tile could be cut in
+  the middle of a character and show a broken glyph. All three now measure
+  characters.
+- **Long lines are cut off at 1023 bytes, and nothing used to tell you.** The
+  game reads at most 1023 bytes of any one line and silently discards the rest.
+  Because that is a limit in bytes rather than letters, it lands at roughly 1000
+  English characters but only 500 Russian or 340 Chinese — so a line that was
+  fine when you wrote it can lose its ending once translated. DialogueForge now
+  counts the bytes as you type and warns before you cross it, and `LoadLog.txt`
+  names any line that arrives already cut.
+- **Fixed a crash when a conversation closed.** Ending a conversation through a
+  farewell option could throw a null-pointer error in the client log as the
+  window tore down. Harmless to play through, but it is gone.
+- **`SHOW_QUEST_LIST` on a trader or a talkable AI showed every quest on the
+  server.** Neither has a quest-giver ID to narrow the list against, so the
+  player was offered every quest they were eligible for, in no order. It now
+  shows nothing there and writes the reason to the server log, pointing at the
+  quest actions to use instead. Quest NPCs are unaffected.
+
+---
+
 ## [1.3.0]
 
 ### Added

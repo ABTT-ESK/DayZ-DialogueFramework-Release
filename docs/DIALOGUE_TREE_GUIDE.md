@@ -107,7 +107,7 @@ in it doesn't work) until you fix it.
 | `NextNodeID` | int | Which node to go to next. Only used when `ActionType` is `"NONE"` (or omitted). `-1` (or omitted) ends the conversation |
 | `RequiredQuestID` | int | Optional gating — only show this response if that quest ID is `COMPLETED` for the player. `-1` (default) = no gating |
 | `HideAfterQuestID` | int | The mirror of the above — **hide** this response once that quest is `COMPLETED`. `-1` (default) = never hidden. Use both to give an option a window |
-| `QuestID` | int | Which quest `OFFER_QUEST` or `ACCEPT_QUEST` acts on. `-1` (default) means `ACCEPT_QUEST` falls back to the live quest-detail step, and `OFFER_QUEST` does nothing |
+| `QuestID` | int | Which quest `OFFER_QUEST`, `ACCEPT_QUEST` or `TURN_IN_QUEST` acts on. `-1` (default) means `ACCEPT_QUEST` and `TURN_IN_QUEST` fall back to the live quest-detail step, and `OFFER_QUEST` does nothing |
 | `ActionType` | string | See [Action types](#action-types) below |
 | `MaxUses` | int | Anti-farm: max times a player may pick this option, ever. `0` (default) = unlimited. After the limit the option disappears — stops reputation-farming by spamming the same choice. In DialogueForge, just set the number; it manages the counter for you |
 | `UsesKey` | string | The hidden per-player counter behind `MaxUses`. DialogueForge generates one when you set a limit — don't invent one, and never reuse the same key on two different options or they share a counter |
@@ -414,8 +414,15 @@ Copy whichever fits. A following line tells you which key actually matched:
 
 Traders with no match open the market directly, exactly as before.
 
-Quest responses (`SHOW_QUEST_LIST` and the rest) don't apply to traders and
-are ignored there.
+`SHOW_QUEST_LIST` doesn't work on a trader. It builds its list from "which
+quests does *this NPC* give", and a trader has no quest-giver ID to match on
+— so it shows nothing and writes the reason to the log.
+
+The by-ID quest actions do work, and are how you give a trader quests:
+`OFFER_QUEST` to open one quest's offer screen, `ACCEPT_QUEST` to hand it
+straight over, and `TURN_IN_QUEST` to take a finished one back. Each names
+its quest in the response's `QuestID` — one option per quest. See
+[Pointing an option at a quest](#pointing-an-option-at-a-quest).
 
 ## Talking to friendly AI
 
@@ -517,10 +524,10 @@ recruit goes through.
 | Value | What it does |
 |---|---|
 | `"NONE"` (default) | Just go to `NextNodeID`. If `NextNodeID` is `-1`, ends the conversation instead |
-| `"SHOW_QUEST_LIST"` | Opens a **live** list of whatever quests are actually available from this NPC right now (built from real Expansion quest data, not authored) |
+| `"SHOW_QUEST_LIST"` | Opens a **live** list of whatever quests are actually available from this NPC right now (built from real Expansion quest data, not authored). **Quest NPCs only** — traders and AI have no quest-giver ID, so it shows nothing there |
 | `"ACCEPT_QUEST"` | Only meaningful as a response inside the live quest-detail step (see below) — accepts the currently-viewed quest |
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
-| `"TURN_IN_QUEST"` | Only meaningful when the quest-detail step is showing a quest that's ready to turn in — completes it |
+| `"TURN_IN_QUEST"` | Hands in the quest in `QuestID` from any option you write, on any character — a trader included. Without a `QuestID`, completes the quest the live quest-detail step is showing |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes the window |
 | `"OPEN_TRADER"` | Trader trees only. Closes dialogue and opens the market |
 | `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. See [Talking to friendly AI](#talking-to-friendly-ai) |
@@ -594,29 +601,56 @@ anywhere, just add matching SoundSets if you want them voiced.
 
 ## Pointing an option at a quest
 
-Two actions hand a specific quest to the player from any option you write.
-Both take the quest in the response's `QuestID`:
+Three actions point an option at one specific quest, from any option you
+write, on any character. All three take the quest in the response's
+`QuestID`:
 
 - **`OFFER_QUEST`** opens that quest's own offer screen -- its description,
   what it wants, what it pays, and the accept and decline buttons. This is
   the one to reach for: the player reads it before committing.
 - **`ACCEPT_QUEST`** hands it straight over with no offer screen. Use it when
   the conversation itself *is* the offer and the player has already said yes.
+- **`TURN_IN_QUEST`** takes a finished quest back and pays it out, opening the
+  reward picker if the quest gives a choice. Use it to close the loop where
+  the player can't reach a quest list — a trader especially.
 
-`ACCEPT_QUEST` without a `QuestID` still means "the quest the live
-quest-detail step is showing", which is how the mod's own accept button
-works. Anywhere else it has nothing to accept, and says so in the log.
+`ACCEPT_QUEST` and `TURN_IN_QUEST` without a `QuestID` still mean "the quest
+the live quest-detail step is showing", which is how the mod's own accept and
+turn-in buttons work. Anywhere else they have nothing to act on, and say so
+in the log.
 
-> **Neither action can hand out a quest the player shouldn't have.** Before
-> anything is started, the mod checks the same rules Expansion uses for its
-> own quest list: already finished it (and it isn't repeatable), already on
-> it, on cooldown, prerequisites not met, achievement quest. If any of those
-> apply, the offer screen simply has no accept button, and `ACCEPT_QUEST`
-> refuses and logs why rather than starting it.
+**`TURN_IN_QUEST` won't pay out a quest that isn't ready to hand in**, and it
+says which it is rather than guessing:
+
+| The player's state | What they're told |
+|---|---|
+| Never took the quest | "You haven't taken that one on." |
+| Still working on it | "You haven't finished that yet." |
+| Already handed it in | "You've already handed that one in." |
+
+Nothing changes in any of those cases, and the log names the state. Where
+the quest is turned in doesn't matter to Expansion — the turn-in NPC ID only
+picks who plays the completion emote — so a trader can close out a quest
+another NPC gave.
+
+> **Neither hand-out action can give a quest the player shouldn't have.**
+> Before anything is started, the mod checks the same rules Expansion uses for
+> its own quest list: already finished it (and it isn't repeatable), already
+> on it, on cooldown, prerequisites not met, achievement quest. If any of
+> those apply, the offer screen simply has no accept button, and
+> `ACCEPT_QUEST` refuses and logs why rather than starting it.
 >
 > The one rule deliberately **not** applied is "is this NPC the quest giver"
 > — that's the whole point of these actions. Any character can point a player
 > at a quest; they still can't skip the chain to get it.
+
+### Giving a trader quests
+
+A trader has no quest-giver ID, so `SHOW_QUEST_LIST` can't work there. These
+three actions are the way round it: one option per quest, each naming its
+`QuestID`. A trader can run a whole quest end to end — `OFFER_QUEST` to give
+it, `TURN_IN_QUEST` to take it back — with `RequiredQuestID` and
+`HideAfterQuestID` swapping the options over as the player progresses.
 
 ## Making an option go away again
 

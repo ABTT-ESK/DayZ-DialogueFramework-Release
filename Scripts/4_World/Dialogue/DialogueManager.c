@@ -21,6 +21,17 @@ class DialogueManager
 
 	protected ref array<ref DialogueTree> m_AllTrees;
 
+	//! The game's JSON reader stops at 1023 bytes per string (a 1024 buffer
+	//! with its terminator). Measured, not guessed: lines authored at 1223,
+	//! 1711, 2008 and 2269 bytes all arrived as exactly 1023.
+	//!
+	//! We cannot warn that a line is "too long" -- by the time the file is
+	//! parsed it has already been cut, and the original length is gone. What
+	//! we can spot is the signature: a line sitting exactly on the limit was
+	//! almost certainly truncated. DialogueForge reads the file itself and so
+	//! can warn properly, before the game ever sees it.
+	protected static const int LINE_BYTES_LIMIT = 1023;
+
 	protected ref array<string> m_LoadIssues;
 
 	protected ref DialogueMenuConfig m_MenuConfig;
@@ -661,10 +672,25 @@ class DialogueManager
 					LogIssue(context + ": node " + checkNode.ID + " has a response (\"" + response.Text + "\") pointing at NextNodeID " + response.NextNodeID + ", which doesn't exist -- likely a typo.");
 			}
 
+			CheckLineLength(context, "node " + checkNode.ID + "'s line", checkNode.SpeakerText);
+
+			if (checkNode.SpeakerLines)
+			{
+				int altIndex = 0;
+				foreach (DialogueSpeakerLine altLine : checkNode.SpeakerLines)
+				{
+					altIndex++;
+					if (altLine)
+						CheckLineLength(context, "node " + checkNode.ID + " alternate line " + altIndex, altLine.Text);
+				}
+			}
+
 			foreach (DialogueResponse questResponse : checkNode.Responses)
 			{
 				if (!questResponse)
 					continue;
+
+				CheckLineLength(context, "node " + checkNode.ID + "'s option \"" + questResponse.Text + "\"", questResponse.Text);
 
 				if (questResponse.RequiredQuestID > 0 && questResponse.RequiredQuestID == questResponse.HideAfterQuestID)
 					LogIssue(context + ": node " + checkNode.ID + " has a response (\"" + questResponse.Text + "\") that shows after quest " + questResponse.RequiredQuestID + " and hides after the same quest -- it can never be seen.");
@@ -673,6 +699,23 @@ class DialogueManager
 					LogIssue(context + ": node " + checkNode.ID + " has an OFFER_QUEST response (\"" + questResponse.Text + "\") with no QuestID -- it will just close the window.");
 			}
 		}
+	}
+
+	//! Spot a line the game's JSON reader has already truncated. See
+	//! LINE_BYTES_LIMIT: the original length is unrecoverable here, so this
+	//! reports the damage rather than predicting it.
+	protected void CheckLineLength(string context, string where, string text)
+	{
+		if (text == "")
+			return;
+
+		int bytes = text.Length();
+		if (bytes < LINE_BYTES_LIMIT)
+			return;
+
+		int chars = text.LengthUtf8();
+		string cut = context + ": " + where + " is " + bytes + " bytes (" + chars + " characters), which is the most the game will read from one line -- it has almost certainly been CUT OFF. Shorten it, or split it across several nodes. Note a non-English character costs two or three bytes, so a translated line runs out of room much sooner.";
+		LogIssue(cut);
 	}
 
 	void DumpTreeDiagnostic(DialogueTree tree, string context)

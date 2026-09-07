@@ -971,7 +971,10 @@ class DialogueWindowMenu : UIScriptedMenu
 				break;
 
 			case DialogueActionType.TURN_IN_QUEST:
-				TurnInActiveQuest();
+				if (response.QuestID > 0)
+					TurnInQuestByID(response.QuestID);
+				else
+					TurnInActiveQuest();
 				break;
 
 			case DialogueActionType.RECRUIT_AI:
@@ -1071,9 +1074,13 @@ class DialogueWindowMenu : UIScriptedMenu
 			if (perLine < 8)
 				perLine = 8;
 
+			//! LengthUtf8, not Length: Length counts BYTES, and perLine is a
+			//! count of characters. A Cyrillic line measures twice its real
+			//! width that way, Chinese three times, so every non-Latin
+			//! language reserved far more height than it needed.
 			int lines = 1;
 			float consumed = perLine;
-			while (consumed < text.Length())
+			while (consumed < text.LengthUtf8())
 			{
 				consumed = consumed + perLine;
 				lines = lines + 1;
@@ -1087,7 +1094,9 @@ class DialogueWindowMenu : UIScriptedMenu
 
 			m_SpeakerLine.SetSize(0.965, neededPx);
 
-			Print("[DialogueFramework] [UI] Speaker line: " + text.Length() + " chars, ~" + perLine + " per line, " + lines + " line(s), " + neededPx + "px in a " + scrollH + "px view");
+			int lineChars = text.LengthUtf8();
+			int lineBytes = text.Length();
+			Print("[DialogueFramework] [UI] Speaker line: " + lineChars + " chars / " + lineBytes + " bytes, ~" + perLine + " per line, " + lines + " line(s), " + neededPx + "px in a " + scrollH + "px view");
 		}
 		else
 		{
@@ -1648,6 +1657,11 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!questConfig)
 			return false;
 
+		//! Traders / AI (NPC ID -1) have no quest identity, so nothing "belongs"
+		//! to them -- otherwise a quest listing -1 as a giver/turn-in would match.
+		if (m_NPCID <= 0)
+			return false;
+
 		array<int> givers = questConfig.GetQuestGiverIDs();
 		if (givers && givers.Find(m_NPCID) > -1)
 			return true;
@@ -1663,6 +1677,15 @@ class DialogueWindowMenu : UIScriptedMenu
 	{
 		Print("[DialogueFramework] [DIAG] GetAvailableQuestsForNPC() entered, NPC ID=" + m_NPCID);
 		array<ExpansionQuestConfig> result = new array<ExpansionQuestConfig>;
+
+		//! Traders and AI open with an NPC ID of -1. QuestDisplayConditions only
+		//! filters by giver/turn-in NPC when the ID is > -1, so passing -1 through
+		//! returns every quest the player is eligible for, server-wide.
+		if (m_NPCID <= 0)
+		{
+			Print("[DialogueFramework] [QUEST] SHOW_QUEST_LIST used on a conversation with no quest-NPC ID (a trader or AI, NPC ID=" + m_NPCID + "). Showing no quests -- use OFFER_QUEST / TURN_IN_QUEST with a QuestID to give quests here.");
+			return result;
+		}
 
 		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
 		if (!player)
@@ -2380,6 +2403,80 @@ class DialogueWindowMenu : UIScriptedMenu
 		EndConversation();
 	}
 
+	//! Hand in the response's QuestID, the mirror of OFFER_QUEST/ACCEPT_QUEST by
+	//! ID. Expansion validates a turn-in on quest STATE, not on proximity to the
+	//! turn-in NPC (that ID only drives the completion emote), so this is
+	//! accepted server-side from any character, a trader included.
+	protected void TurnInQuestByID(int questID)
+	{
+		ExpansionQuestConfig quest = ExpansionQuestModule.GetModuleInstance().GetQuestConfigByID(questID);
+		if (!quest)
+		{
+			Print("[DialogueFramework] [QUEST] [ERROR] TURN_IN_QUEST points at quest " + questID + ", which no quest config matches. Check the ID against your Expansion quest files.");
+			NotifyPlayer("#STR_DIALOGUEFW_NOTIFY_BADOPTION", "That option isn't set up correctly. The server owner can find the reason in the log.", true);
+			EndConversation();
+			return;
+		}
+
+		ExpansionQuestState state = GetPlayerQuestState(questID);
+		if (state != ExpansionQuestState.CAN_TURNIN)
+		{
+			RefuseTurnIn(questID, state);
+			return;
+		}
+
+		//! Drive the existing hand-in flow -- objective-item picker, reward
+		//! picker, then the turn-in RPC -- all of which read m_ActiveQuestID.
+		m_ActiveQuestID = questID;
+		TurnInActiveQuest();
+	}
+
+	//! This player's state for one quest. NONE when the client has no quest data
+	//! yet, which reads the same as "never started it" and is handled as such.
+	protected ExpansionQuestState GetPlayerQuestState(int questID)
+	{
+		ExpansionQuestPersistentData questData = ExpansionQuestModule.GetModuleInstance().GetClientQuestData();
+		ExpansionQuestState state = ExpansionQuestState.NONE;
+		if (questData)
+			state = questData.GetQuestStateByQuestID(questID);
+
+		return state;
+	}
+
+	//! Which message the player gets follows the quest's real state -- "you
+	//! haven't finished that yet" is only true while a quest is STARTED. Each
+	//! string is assigned to its own local first: EnforceScript aliases string
+	//! temporaries, so building them inline would let them clobber each other.
+	protected void RefuseTurnIn(int questID, ExpansionQuestState state)
+	{
+		string key;
+		string fallback;
+		string reason;
+
+		if (state == ExpansionQuestState.COMPLETED)
+		{
+			key = "#STR_DIALOGUEFW_NOTIFY_ALREADYDONE";
+			fallback = "You've already handed that one in.";
+			reason = "the player has already finished and handed in this quest (COMPLETED)";
+		}
+		else if (state == ExpansionQuestState.STARTED)
+		{
+			key = "#STR_DIALOGUEFW_NOTIFY_CANTTURNIN";
+			fallback = "You haven't finished that yet.";
+			reason = "the player is still working on this quest (STARTED)";
+		}
+		else
+		{
+			key = "#STR_DIALOGUEFW_NOTIFY_NOTSTARTED";
+			fallback = "You haven't taken that one on.";
+			reason = "this player has not started this quest (NONE/INVALID)";
+		}
+
+		Print("[DialogueFramework] [QUEST] Refused to turn in quest " + questID + " -- " + reason + ". Nothing was changed.");
+		NotifyPlayer(key, fallback, false);
+		EndConversation();
+	}
+
 	//! Shows the quest's own offer screen -- description, item tiles, the
 	//! accept and decline buttons -- exactly as the live quest list does.
 	protected void OfferQuest(int questID)
@@ -2684,10 +2781,12 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected string ShortenForTile(string text)
 	{
-		if (text.Length() <= TILE_NAME_MAX)
+		if (text.LengthUtf8() <= TILE_NAME_MAX)
 			return text;
 
-		return text.Substring(0, TILE_NAME_MAX - 1) + ".";
+		//! SubstringUtf8: cutting on a byte index can land mid-character and
+		//! leave a broken glyph on the tile in any non-Latin language.
+		return text.SubstringUtf8(0, TILE_NAME_MAX - 1) + ".";
 	}
 
 	protected void SelectReward(int index)
@@ -3113,7 +3212,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (perLine < 4)
 			perLine = 4;
 
-		int length = text.Length();
+		//! Characters, not bytes -- see SetSpeakerLine. Measuring bytes here
+		//! ran the font-shrink loop far harder than it needed to, so a
+		//! translated button sat at the minimum font size for no reason.
+		int length = text.LengthUtf8();
 		int lines = 1;
 		float consumed = perLine;
 
@@ -3513,9 +3615,20 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] DialogueWindowMenu.OnHide() fired.");
 		StopDialogueVoice();
 
-		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(ReapplyResponseSizes);
-		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(ExecuteReturnToRoot);
-		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(ShowSettingsScreen);
+		//! OnHide can run AFTER the destructor has already fired -- closing on
+		//! END_CONVERSATION logs the destructor first -- and the GUI call queue
+		//! is gone by then, so calling Remove on it threw a NullPointerError
+		//! every time a conversation was closed that way.
+		ScriptCallQueue guiQueue;
+		if (GetGame())
+			guiQueue = GetGame().GetCallQueue(CALL_CATEGORY_GUI);
+
+		if (guiQueue)
+		{
+			guiQueue.Remove(ReapplyResponseSizes);
+			guiQueue.Remove(ExecuteReturnToRoot);
+			guiQueue.Remove(ShowSettingsScreen);
+		}
 
 		ClearButtons();
 
