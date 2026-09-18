@@ -7,6 +7,35 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.5.0]
+
+### Added
+- **An option can be shown only while a quest is in a particular state.** Pick a
+  quest and one of *not started yet*, *in progress*, *ready to hand in* or
+  *completed*, and the option only appears then. The obvious use is a hand-in
+  button that stays hidden until the player has actually finished the job,
+  rather than sitting there through the whole conversation — but it also covers
+  an NPC who only asks how you are getting on while you are actually on it.
+- **Player-to-player traders can hold conversations.** P2P traders never used
+  the ordinary market menu, so they were invisible to the mod. They now open a
+  conversation the same way any other trader does, and `OPEN_TRADER` sends the
+  player through to the P2P market. Attach one with `P2PTraderIDs` — the id
+  from `expansion\p2pmarket\P2PTrader_<n>.json`, which is unique per trader.
+  - Like an ordinary trader they have no quest-giver identity, so
+    `SHOW_QUEST_LIST` shows nothing there; give quests with `OFFER_QUEST` and
+    take them back with `TURN_IN_QUEST`.
+- **A worked example of a trader who gives quests.**
+  [`examples/TraderQuestChain`](examples/TraderQuestChain) is one trader who
+  talks, keeps the shop open and hands out two quests in a row, ready to copy
+  onto a server. [`docs/TRADER_QUEST_CHAIN.md`](docs/TRADER_QUEST_CHAIN.md)
+  explains every field, how to build the same thing in DialogueForge, how to
+  place a new trader, and how to move an existing Expansion setup over —
+  including the two quest settings that catch everyone out: an empty
+  `QuestGiverIDs` starts the quest for every player at login, and an empty
+  `QuestTurnInIDs` hands it in without the trader.
+
+---
+
 ## [1.4.0]
 
 ### Added

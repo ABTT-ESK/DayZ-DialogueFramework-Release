@@ -1,0 +1,71 @@
+{
+    "ConfigVersion": 2,
+    "Quests": [
+        {
+            "QuestID": 1001,
+            "AcceptTexts": [
+                "Three rags. I'll find them."
+            ],
+            "DeclineTexts": [
+                "Not right now."
+            ],
+            "OfferBackTexts": [
+                "Let me think about it."
+            ],
+            "InProgressTexts": [
+                "Still looking."
+            ],
+            "InProgressBackTexts": [
+                "Let's talk about something else."
+            ],
+            "TurnInTexts": [
+                "Here are your rags."
+            ],
+            "NotYetTexts": [
+                "I'll come back."
+            ],
+            "TurnInBackTexts": [
+                "Hold on, something else first."
+            ],
+            "QuestListTexts": [],
+            "QuestListBackTexts": [],
+            "NoQuestsTexts": [],
+            "NoQuestsLeaveTexts": [],
+            "NoQuestsBackTexts": [],
+            "RewardSelectText": ""
+        },
+        {
+            "QuestID": 1002,
+            "AcceptTexts": [
+                "Two apples. On it."
+            ],
+            "DeclineTexts": [
+                "Maybe later."
+            ],
+            "OfferBackTexts": [
+                "Let me think about it."
+            ],
+            "InProgressTexts": [
+                "Still searching."
+            ],
+            "InProgressBackTexts": [
+                "Let's talk about something else."
+            ],
+            "TurnInTexts": [
+                "Two apples, as promised."
+            ],
+            "NotYetTexts": [
+                "I'll come back."
+            ],
+            "TurnInBackTexts": [
+                "Hold on, something else first."
+            ],
+            "QuestListTexts": [],
+            "QuestListBackTexts": [],
+            "NoQuestsTexts": [],
+            "NoQuestsLeaveTexts": [],
+            "NoQuestsBackTexts": [],
+            "RewardSelectText": ""
+        }
+    ]
+}

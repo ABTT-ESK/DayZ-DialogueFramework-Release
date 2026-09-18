@@ -152,6 +152,15 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected bool m_OpeningTrader;
 
+	//! Set when the conversation was opened from a player-to-player trader, so
+	//! OPEN_TRADER sends the player to the P2P market rather than the ordinary
+	//! one -- they are different menus.
+	protected bool m_IsP2PTrader;
+
+	//! Which P2P trader, so OPEN_TRADER can ask the server for that market's
+	//! data once the market menu is open.
+	protected int m_P2PTraderID = -1;
+
 	protected ExpansionNPCBase m_TalkingNPC;
 #ifdef EXPANSIONMODAI
 	protected eAIBase m_TalkingNPCAI;
@@ -774,6 +783,8 @@ class DialogueWindowMenu : UIScriptedMenu
 			return false;
 		if (QuestIsCompleted(response.HideAfterQuestID))
 			return false;
+		if (!QuestStateGatePasses(response))
+			return false;
 		if (!VarGatePasses(response.RequiredVars))
 			return false;
 		if (response.MaxUses > 0 && response.UsesKey != "")
@@ -782,6 +793,33 @@ class DialogueWindowMenu : UIScriptedMenu
 			if (used >= response.MaxUses)
 				return false;
 		}
+		return true;
+	}
+
+	//! Show the response only while its quest sits in the chosen state. This
+	//! is what lets a turn-in button appear only once the quest is finished,
+	//! rather than sitting there through the whole conversation.
+	protected bool QuestStateGatePasses(DialogueResponse response)
+	{
+		if (response.ShowWhileQuestID <= 0)
+			return true;
+		if (response.ShowWhileQuestState == DialogueQuestStateFilter.ANY)
+			return true;
+
+		ExpansionQuestState state = GetPlayerQuestState(response.ShowWhileQuestID);
+
+		if (response.ShowWhileQuestState == DialogueQuestStateFilter.NOT_STARTED)
+			return state == ExpansionQuestState.NONE;
+
+		if (response.ShowWhileQuestState == DialogueQuestStateFilter.ACTIVE)
+			return state == ExpansionQuestState.STARTED || state == ExpansionQuestState.CAN_TURNIN;
+
+		if (response.ShowWhileQuestState == DialogueQuestStateFilter.READY)
+			return state == ExpansionQuestState.CAN_TURNIN;
+
+		if (response.ShowWhileQuestState == DialogueQuestStateFilter.COMPLETED)
+			return state == ExpansionQuestState.COMPLETED;
+
 		return true;
 	}
 
@@ -944,6 +982,15 @@ class DialogueWindowMenu : UIScriptedMenu
 				break;
 
 			case DialogueActionType.OPEN_TRADER:
+			#ifdef EXPANSIONMODP2PMARKET
+				if (m_IsP2PTrader)
+				{
+					Print("[DialogueFramework] [DIAG] OPEN_TRADER -- closing dialogue and opening the P2P market.");
+					m_OpeningTrader = true;
+					EndConversation();
+					break;
+				}
+			#endif
 			#ifdef EXPANSIONMODMARKET
 				Print("[DialogueFramework] [DIAG] OPEN_TRADER -- closing dialogue and opening the market.");
 				m_OpeningTrader = true;
@@ -2928,9 +2975,19 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 
 		bool openTrader = window.IsOpeningTrader();
+		bool isP2P = window.DialogueFW_IsP2PTrader();
+		int p2pTraderID = window.DialogueFW_P2PTraderID();
 
 		window.Close();
 		DialogueWindowLauncher.GetInstance().ReleaseWindow(window);
+
+	#ifdef EXPANSIONMODP2PMARKET
+		if (openTrader && isP2P)
+		{
+			DialogueP2PMarketOpener.OpenAfterClose(p2pTraderID);
+			return;
+		}
+	#endif
 
 	#ifdef EXPANSIONMODMARKET
 		if (openTrader)
@@ -2943,6 +3000,22 @@ class DialogueWindowMenu : UIScriptedMenu
 	bool IsOpeningTrader()
 	{
 		return m_OpeningTrader;
+	}
+
+	void DialogueFW_SetP2PTrader(bool isP2P, int traderID)
+	{
+		m_IsP2PTrader = isP2P;
+		m_P2PTraderID = traderID;
+	}
+
+	bool DialogueFW_IsP2PTrader()
+	{
+		return m_IsP2PTrader;
+	}
+
+	int DialogueFW_P2PTraderID()
+	{
+		return m_P2PTraderID;
 	}
 
 	protected void PlayRandomVoiceLine(array<string> pool)

@@ -1,0 +1,172 @@
+{
+    "ID": 1000,
+    "NPCIDs": [],
+    "RootNodeID": 1,
+    "TraderIDs": [
+        "Medicals"
+    ],
+    "TraderClassNames": [],
+    "TraderPositions": [],
+    "TraderPositionRadius": 8.0,
+    "TraderMinKeyMatches": 1,
+    "GreetingVoiceLineIDs": [],
+    "FarewellVoiceLineIDs": [],
+    "QuestListTexts": [],
+    "NoQuestsTexts": [],
+    "NoQuestsBackTexts": [],
+    "NoQuestsLeaveTexts": [],
+    "NoQuestsVoiceLineIDs": [],
+    "QuestListBackTexts": [],
+    "OfferBackTexts": [],
+    "InProgressBackTexts": [],
+    "TurnInBackTexts": [],
+    "Stages": [],
+    "Nodes": [
+        {
+            "ID": 1,
+            "Type": "STANDARD",
+            "SpeakerText": "Steady hands, clean tools, fair prices. What can I do for you?",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Show me what you're selling.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Do you need a hand with anything?",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OFFER_QUEST",
+                    "HideAfterQuestID": 1001,
+                    "QuestID": 1001
+                },
+                {
+                    "Text": "Is there anything else I can do?",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": 1001,
+                    "ActionType": "OFFER_QUEST",
+                    "HideAfterQuestID": 1002,
+                    "QuestID": 1002
+                },
+                {
+                    "Text": "How are your patients doing?",
+                    "NextNodeID": 3,
+                    "RequiredQuestID": 1002,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "What is this place?",
+                    "NextNodeID": 2,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Nothing for now.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ],
+            "SpeakerLines": [
+                {
+                    "Text": "Back again? Those rags have already patched up two people. Thank you.",
+                    "RequiredQuestID": -1,
+                    "OverrideQuestID": 1001,
+                    "VoiceLineIDs": []
+                },
+                {
+                    "Text": "There's my favourite volunteer. The ward hasn't looked this good all year.",
+                    "RequiredQuestID": -1,
+                    "OverrideQuestID": 1002,
+                    "VoiceLineIDs": []
+                }
+            ]
+        },
+        {
+            "ID": 2,
+            "Type": "STANDARD",
+            "SpeakerText": "A field hospital, if you're being generous. Six beds, one medic and whatever the scavengers bring in. I sell what I can spare so I can buy what I can't.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "Show me what you're selling.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Let's talk about something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll let you work.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 3,
+            "Type": "STANDARD",
+            "SpeakerText": "Better than they've been in weeks, thanks to you. Which is why I'd like to ask you something bigger - just not today.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "What kind of something?",
+                    "NextNodeID": 4,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Show me what you're selling.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Let's talk about something else.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "I'll let you work.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        },
+        {
+            "ID": 4,
+            "Type": "STANDARD",
+            "SpeakerText": "The army left a supply cache north of here. Nobody has been brave enough to go and look. When you're ready, come and ask me about it.",
+            "VoiceLineIDs": [],
+            "Responses": [
+                {
+                    "Text": "I'll think about it.",
+                    "NextNodeID": 1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "NONE"
+                },
+                {
+                    "Text": "Show me what you're selling.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "OPEN_TRADER"
+                },
+                {
+                    "Text": "Take care of yourself.",
+                    "NextNodeID": -1,
+                    "RequiredQuestID": -1,
+                    "ActionType": "END_CONVERSATION"
+                }
+            ]
+        }
+    ]
+}

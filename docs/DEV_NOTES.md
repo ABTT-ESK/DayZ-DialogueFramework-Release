@@ -57,6 +57,16 @@ Doing so destroys the object while its method is still on the stack.
 Everything that closes the window or swaps the widget tree is deferred one
 frame with `CallLater`.
 
+**Any menu opened after the window closes waits 100 ms.** The window's
+`OnHide` runs after `Close()` returns — after the destructor, even — and
+`UnlockPlayerMovement` there shows no cursor and re-enables every active
+input. Expansion's menus lock the same way (`ShowUICursor`, `ForceDisable`
+on every active input), so a menu opened in the same frame is unlocked
+underneath itself: no cursor, and the player walks around with it open. The
+market (`DialogueTraderSession.OpenMarketForCurrentTrader`) has waited 100 ms
+since 1.0.0. The P2P market (`DialogueP2PMarketOpener`) shipped without the
+wait at first and hit exactly that.
+
 **The window needs a strong reference.** It's held by
 `DialogueWindowLauncher`; without that it gets collected before rendering a
 frame.
@@ -451,6 +461,39 @@ stashes the request (tree + AI entity + name) in `DialogueAISession` (4_World)
 and calls `EnterScriptedMenu(MENU_DIALOGUEFW_AI)`; the 5_Mission
 `modded MissionBase.CreateScriptedMenu` reads the session and builds the
 window. Same pattern Expansion uses for the code-lock UI.
+
+**P2P traders are a separate menu entirely.** `ExpansionMarketMenu` is not
+involved: a player-to-player trader opens `ExpansionP2PMarketMenu`, a script-
+view menu created by name, so the `SetTraderObject` hook cannot see it. The
+interception point is the action instead -- `modded class
+`ExpansionActionOpenP2PMarketMenu.OnExecuteClient`, guarded by
+`#ifdef EXPANSIONMODP2PMARKET`. Identity comes from `GetP2PTraderID()`, which
+is a registered net-sync variable (`RegisterNetSyncVariableInt`) and so is
+valid client-side. Those ids are unique per trader, which is why
+`GetTreeForP2PTrader` matches on the id alone with no class/position/radius.
+
+**The P2P market fills itself from a server push, not a request.**
+`ExpansionP2PMarketMenu` subscribes to the module's listing invokers in its
+constructor and waits. The data it needs to start -- trader ID, name, icon,
+currencies, `m_Init = true` -- is sent only by the action's
+`OnExecuteServer`, the moment the trader is used. With a conversation in front,
+that push lands while no menu exists and is lost, and the module's own
+`RequestBasicListingData` never sets `m_Init`. So `OPEN_TRADER` opens the menu
+with `CreateSVMenu` first — 100 ms after the conversation closes, like any
+menu opened after the window — then sends `CLIENT_REQUEST_P2P_MARKET` with the
+trader ID. The server (`DialogueP2PSession.ServerOpenMarket`) repeats exactly
+what `OnExecuteServer` does -- `AddTradingPlayer`, `SendCategoryListingsData`,
+`SendBasicListingData` with `m_Init` -- after the module's own
+`CheckCanUseTrader` and a 100 m reach check against the trader's position and
+waypoints, which stands in for the action's cursor target. It reads the
+`m_Waypoints` field, not `GetWaypoints()`: that getter only exists under
+`#ifdef EXPANSIONMODAI`, and the P2P market runs without Expansion AI.
+
+There is **no skip flag** for P2P (unlike `DialogueTraderSession`): opening the
+market goes straight to `CreateSVMenu` and never passes back through the
+action, so a flag set there would only be consumed on the player's *next*
+visit, skipping that conversation. The window is created with **NPC ID -1**,
+same as an ordinary trader, so the `SHOW_QUEST_LIST` guard applies unchanged.
 
 **Matching is ID-only.** `DialogueManager.GetTreeForAIPatrol(patrolID, subID)`
 returns the tree whose `AIPatrolID` matches (a specific `AIPatrolSubID` beats a

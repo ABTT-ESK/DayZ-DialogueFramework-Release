@@ -14,6 +14,8 @@ folder.** No scripting, and no repacking for anything except voice audio.
 
 - Branching dialogue trees, one folder per NPC
 - Traders can talk too — conversation first, then the shop
+- So can Expansion's player-to-player traders — conversation first, then the
+  P2P market
 - Write your own small talk, lore and quest wording — nothing is generic
 - Per-quest accept / decline / turn-in wording, so every quest reads in its
   own voice
@@ -47,6 +49,8 @@ folder.** No scripting, and no repacking for anything except voice audio.
   font stay yours
 - Options can be shown *or hidden* by quest progress, and can offer or hand over
   a specific quest straight from a conversation
+- Options can wait for a quest's stage — not started, in progress, ready to hand
+  in, or completed — so a hand-in button only appears once the job is done
 - Multi-language dialogue: every player reads the conversation in their own DayZ
   language, or picks one in game. Translations sit beside your trees as overlay
   files — nothing you already wrote has to change, and anything untranslated
@@ -144,6 +148,7 @@ options until you do. See [Updating](docs/UPDATING.md).
 | [Config reference](docs/CONFIG_REFERENCE.md) | Every field of every config file, annotated. **Start here** |
 | [The screens](docs/SCREENS.md) | What each screen in the window is called, and which settings change its wording |
 | [Dialogue trees](docs/DIALOGUE_TREE_GUIDE.md) | Writing conversations: branching, quest gating, quest wording |
+| [A trader who gives quests](docs/TRADER_QUEST_CHAIN.md) | A worked example: one trader, two quests in a row, the shop still open. Ready-to-run files included |
 | [Window appearance](docs/MENU_CONFIG_GUIDE.md) | Position presets, colours, font styles, custom layouts |
 | [Languages](docs/LANGUAGES.md) | Running your server in more than one language. **Start here** for translations |
 | [Translation file format](docs/CONFIG_REFERENCE.md#6-translations--localizationlanguagejson) | Every field and key, for hand-editing |
@@ -154,7 +159,9 @@ options until you do. See [Updating](docs/UPDATING.md).
 | [Changelog](CHANGELOG.md) | What changed in each release |
 | [Roadmap](ROADMAP.md) | Planned features and known limitations |
 
-Ready-to-use files are in [`examples/`](examples/).
+Ready-to-use files are in [`examples/`](examples/). For a complete trader
+quest chain you can copy straight onto a server, see
+[`examples/TraderQuestChain`](examples/TraderQuestChain).
 
 ## Voice lines
 

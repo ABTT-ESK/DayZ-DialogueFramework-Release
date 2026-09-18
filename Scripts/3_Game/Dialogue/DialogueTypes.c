@@ -386,6 +386,25 @@ class DialogueNode
 	}
 }
 
+//! What a response can wait for. Strings rather than numbers so a config
+//! reads plainly and an unknown value can be ignored instead of misbehaving.
+class DialogueQuestStateFilter
+{
+	static const string ANY = "";
+	static const string NOT_STARTED = "NOT_STARTED";
+	static const string ACTIVE = "ACTIVE";
+	static const string READY = "READY";
+	static const string COMPLETED = "COMPLETED";
+
+	static bool IsKnown(string value)
+	{
+		if (value == ANY || value == NOT_STARTED)
+			return true;
+
+		return value == ACTIVE || value == READY || value == COMPLETED;
+	}
+}
+
 class DialogueResponse
 {
 	string Text;
@@ -399,6 +418,11 @@ class DialogueResponse
 	//! Which quest OFFER_QUEST / ACCEPT_QUEST act on. -1 means "whichever
 	//! quest the live quest-detail step is showing", the old behaviour.
 	int QuestID = -1;
+
+	//! Show this response only while ShowWhileQuestID sits in this state.
+	//! -1 / "" means no state gating at all, which is the old behaviour.
+	int ShowWhileQuestID = -1;
+	string ShowWhileQuestState = DialogueQuestStateFilter.ANY;
 
 	string ActionType = DialogueActionType.NONE;
 
@@ -424,6 +448,13 @@ class DialogueResponse
 
 		if (QuestID <= 0)
 			QuestID = -1;
+
+		if (ShowWhileQuestID <= 0)
+			ShowWhileQuestID = -1;
+
+		//! An unrecognised state would otherwise hide the response forever.
+		if (!DialogueQuestStateFilter.IsKnown(ShowWhileQuestState))
+			ShowWhileQuestState = DialogueQuestStateFilter.ANY;
 
 		if (ActionType == "")
 			ActionType = DialogueActionType.NONE;
@@ -455,6 +486,8 @@ class DialogueResponse
 		rpc.Write(UsesKey);
 		rpc.Write(HideAfterQuestID);
 		rpc.Write(QuestID);
+		rpc.Write(ShowWhileQuestID);
+		rpc.Write(ShowWhileQuestState);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -469,6 +502,8 @@ class DialogueResponse
 		if (!ctx.Read(UsesKey)) return false;
 		if (!ctx.Read(HideAfterQuestID)) return false;
 		if (!ctx.Read(QuestID)) return false;
+		if (!ctx.Read(ShowWhileQuestID)) return false;
+		if (!ctx.Read(ShowWhileQuestState)) return false;
 		return true;
 	}
 }
@@ -560,6 +595,11 @@ class DialogueTree
 
 	int TraderMinKeyMatches = 1;
 
+	//! Which player-to-player market trader(s) this conversation belongs to,
+	//! by the P2P trader ID from expansion\p2pmarket\P2PTrader_<n>.json. Those
+	//! ids are unique per trader, so no class or position narrowing is needed.
+	ref array<int> P2PTraderIDs;
+
 	int AIPatrolID = 0;
 
 	int AIPatrolSubID = 0;
@@ -594,6 +634,7 @@ class DialogueTree
 		TraderIDs = new array<string>;
 		TraderClassNames = new array<string>;
 		TraderPositions = new array<string>;
+		P2PTraderIDs = new array<int>;
 		GreetingVoiceLineIDs = new array<string>;
 		FarewellVoiceLineIDs = new array<string>;
 		QuestListTexts = new array<string>;
@@ -629,6 +670,9 @@ class DialogueTree
 
 		if (TraderMinKeyMatches < 1)
 			TraderMinKeyMatches = 1;
+
+		if (!P2PTraderIDs)
+			P2PTraderIDs = new array<int>;
 
 		if (AIPatrolID < 0)
 			AIPatrolID = 0;
@@ -766,6 +810,10 @@ class DialogueTree
 		rpc.Write(Nodes.Count());
 		foreach (DialogueNode node : Nodes)
 			node.OnSend(rpc);
+
+		rpc.Write(P2PTraderIDs.Count());
+		foreach (int p2pTraderID : P2PTraderIDs)
+			rpc.Write(p2pTraderID);
 
 		rpc.Write(AIPatrolID);
 		rpc.Write(AIPatrolSubID);
@@ -950,6 +998,16 @@ class DialogueTree
 			DialogueNode node = new DialogueNode();
 			if (!node.OnRecieve(ctx)) return false;
 			Nodes.Insert(node);
+		}
+
+		int p2pCount;
+		if (!ctx.Read(p2pCount)) return false;
+		P2PTraderIDs.Clear();
+		for (int pt = 0; pt < p2pCount; pt++)
+		{
+			int p2pTraderID;
+			if (!ctx.Read(p2pTraderID)) return false;
+			P2PTraderIDs.Insert(p2pTraderID);
 		}
 
 		if (!ctx.Read(AIPatrolID)) return false;

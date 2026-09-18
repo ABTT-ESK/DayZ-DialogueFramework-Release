@@ -33,6 +33,7 @@ field** shown and explained inline.
   "TraderPositions": [],                // <<<<< TRADER dialogue only. ONE specific trader at this world position, e.g. "1234.50 300.00 5678.90". Most specific key -- wins over the two above
   "TraderPositionRadius": 50.0,         // <<<<< How close (metres) a trader must be to a listed position to match. Generous is fine -- AI traders drift, and the nearest listed position still breaks ties between outposts
   "TraderMinKeyMatches": 2,             // <<<<< How many of the three keys above must agree. 2 is recommended: definitions and entity classes are shared between outposts, and positions drift, but two agreeing is reliable
+  "P2PTraderIDs": [],                   // <<<<< P2P TRADER dialogue (needs Expansion P2P Market). The m_TraderID from expansion\p2pmarket\P2PTrader_<n>.json. Unique per trader, so no class/position needed
   "AIPatrolID": 0,                      // <<<<< FRIENDLY-AI dialogue (needs Expansion AI). Matches AI spawned from your AIPatrol\AIPatrols.json patrol with this DialogueID. 0 = not an AI tree
   "AIPatrolSubID": 0,                   // <<<<< With AIPatrolID set: 0 = any unit in that patrol; a number = only that one unit (1, 2, 3...). Lets each unit in a multi-AI patrol have its own dialogue
   "ReputationVar": "",                  // <<<<< Optional. The variable that is THIS character's reputation (e.g. "rep_hana"). Set it so this character's rep is separate from others and shown in the window
@@ -91,6 +92,15 @@ field** shown and explained inline.
           "QuestID": 102                    // <<<<< Which quest. Required for OFFER_QUEST; optional for ACCEPT_QUEST and TURN_IN_QUEST
         },
         {
+          "Text": "The barn's clear.",
+          "NextNodeID": -1,
+          "RequiredQuestID": -1,
+          "ActionType": "TURN_IN_QUEST",    // <<<<< Hands quest 102 in, right here
+          "QuestID": 102,
+          "ShowWhileQuestID": 102,          // <<<<< Only shown while quest 102 is in the state below. -1 (or omitted) = no state check
+          "ShowWhileQuestState": "READY"    // <<<<< NOT_STARTED, ACTIVE (taken, not handed in yet), READY (finished, waiting to be handed in) or COMPLETED
+        },
+        {
           "Text": "Here, take this.",
           "NextNodeID": 1,
           "RequiredQuestID": -1,
@@ -135,7 +145,7 @@ field** shown and explained inline.
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
 | `"TURN_IN_QUEST"` | Hands in the quest in `QuestID`, from any character — a trader included. Opens the reward picker if the quest requires a choice. Without a `QuestID`, hands in the quest being viewed, which only works inside the live quest-detail step |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes |
-| `"OPEN_TRADER"` | Traders only. Closes dialogue and opens the market menu |
+| `"OPEN_TRADER"` | Traders only. Closes dialogue and opens the market menu — the P2P market for a P2P trader |
 | `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. Respects Expansion's recruit settings; add a `RequiredQuestID` to lock it behind a quest |
 
 ## All `Type` values

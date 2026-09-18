@@ -15,6 +15,9 @@ class DialogueTraderSession
 		return s_Instance;
 	}
 
+	//! 100 ms, not the next frame: the dialogue window's OnHide gives the
+	//! player their controls back and hides the cursor after Close() returns,
+	//! and a market opened before that loses both.
 	static void OpenMarketForCurrentTrader()
 	{
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(GetInstance().OpenMarketDeferred, 100, false);

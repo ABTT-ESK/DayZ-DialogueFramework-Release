@@ -108,6 +108,8 @@ in it doesn't work) until you fix it.
 | `RequiredQuestID` | int | Optional gating — only show this response if that quest ID is `COMPLETED` for the player. `-1` (default) = no gating |
 | `HideAfterQuestID` | int | The mirror of the above — **hide** this response once that quest is `COMPLETED`. `-1` (default) = never hidden. Use both to give an option a window |
 | `QuestID` | int | Which quest `OFFER_QUEST`, `ACCEPT_QUEST` or `TURN_IN_QUEST` acts on. `-1` (default) means `ACCEPT_QUEST` and `TURN_IN_QUEST` fall back to the live quest-detail step, and `OFFER_QUEST` does nothing |
+| `ShowWhileQuestID` | int | Optional. Show this response only while that quest is in the state named by `ShowWhileQuestState`. `-1` (default) = no state gating |
+| `ShowWhileQuestState` | string | Which state `ShowWhileQuestID` has to be in: `"NOT_STARTED"`, `"ACTIVE"` (started, not yet handed in), `"READY"` (finished and waiting to be handed in) or `"COMPLETED"`. Empty (default) = no state gating |
 | `ActionType` | string | See [Action types](#action-types) below |
 | `MaxUses` | int | Anti-farm: max times a player may pick this option, ever. `0` (default) = unlimited. After the limit the option disappears — stops reputation-farming by spamming the same choice. In DialogueForge, just set the number; it manages the counter for you |
 | `UsesKey` | string | The hidden per-player counter behind `MaxUses`. DialogueForge generates one when you set a limit — don't invent one, and never reuse the same key on two different options or they share a counter |
@@ -416,13 +418,39 @@ Traders with no match open the market directly, exactly as before.
 
 `SHOW_QUEST_LIST` doesn't work on a trader. It builds its list from "which
 quests does *this NPC* give", and a trader has no quest-giver ID to match on
-— so it shows nothing and writes the reason to the log.
+— so it shows nothing and writes the reason to the log. The same is true of a
+player-to-player trader.
 
 The by-ID quest actions do work, and are how you give a trader quests:
 `OFFER_QUEST` to open one quest's offer screen, `ACCEPT_QUEST` to hand it
 straight over, and `TURN_IN_QUEST` to take a finished one back. Each names
 its quest in the response's `QuestID` — one option per quest. See
 [Pointing an option at a quest](#pointing-an-option-at-a-quest).
+
+## Talking to player-to-player traders
+
+P2P traders don't use the ordinary market menu, so they need their own key.
+Match one with `P2PTraderIDs`, using the `m_TraderID` from
+`expansion\p2pmarket\P2PTrader_<n>.json`:
+
+```json
+{
+  "P2PTraderIDs": [1],
+  "RootNodeID": 1,
+  "Nodes": [ ... ]
+}
+```
+
+Those ids are unique per trader, so nothing else is needed — no class name, no
+position, no match radius. Put the file in a `P2PTrader_<name>` folder to keep
+it tidy; the folder name is only a label.
+
+`OPEN_TRADER` sends the player through to the P2P market, exactly as it opens
+the shop for an ordinary trader. Everything else — branching, reputation,
+voice lines, quests by ID — behaves the same.
+
+> Requires Expansion's **P2P Market** module. Without it these trees simply
+> never match anything, and nothing else is affected.
 
 ## Talking to friendly AI
 
@@ -529,7 +557,7 @@ recruit goes through.
 | `"DECLINE_QUEST"` | Ends the conversation without accepting |
 | `"TURN_IN_QUEST"` | Hands in the quest in `QuestID` from any option you write, on any character — a trader included. Without a `QuestID`, completes the quest the live quest-detail step is showing |
 | `"END_CONVERSATION"` | Plays a random farewell line, then closes the window |
-| `"OPEN_TRADER"` | Trader trees only. Closes dialogue and opens the market |
+| `"OPEN_TRADER"` | Trader trees only. Closes dialogue and opens the market — the P2P market for a P2P trader |
 | `"RECRUIT_AI"` | AI trees only. Recruits the AI into the player's group, then closes. See [Talking to friendly AI](#talking-to-friendly-ai) |
 | `"GO_HOSTILE"` | AI trees only. The AI's whole patrol turns hostile and attacks the player, then closes. For conversations that can go sideways |
 
@@ -651,6 +679,38 @@ three actions are the way round it: one option per quest, each naming its
 `QuestID`. A trader can run a whole quest end to end — `OFFER_QUEST` to give
 it, `TURN_IN_QUEST` to take it back — with `RequiredQuestID` and
 `HideAfterQuestID` swapping the options over as the player progresses.
+
+For a complete example you can copy onto a server — one trader giving two
+quests in a row, with the Expansion quest files it needs — see
+[A trader who gives quests](TRADER_QUEST_CHAIN.md).
+
+## Showing an option only while a quest is running
+
+`RequiredQuestID` and `HideAfterQuestID` both key on a quest being **completed**.
+To key on the states in between, use `ShowWhileQuestID` with
+`ShowWhileQuestState`:
+
+| State | The option appears |
+|---|---|
+| `"NOT_STARTED"` | Before the player has taken that quest |
+| `"ACTIVE"` | While they are on it, whether or not they have finished |
+| `"READY"` | Only once they have finished it and can hand it in |
+| `"COMPLETED"` | Only after they have handed it in |
+
+The natural use is a hand-in button:
+
+```json
+{
+  "Text": "Here's your rag. Call us square.",
+  "ActionType": "TURN_IN_QUEST",
+  "QuestID": 177,
+  "ShowWhileQuestID": 177,
+  "ShowWhileQuestState": "READY"
+}
+```
+
+Now that option is simply absent until the player has the rag, instead of being
+there all along and refusing.
 
 ## Making an option go away again
 

@@ -567,6 +567,26 @@ class DialogueManager
 		return null;
 	}
 
+	//! A P2P trader conversation, matched purely on the P2P trader id. Those
+	//! ids are unique per trader in expansion\p2pmarket, so there is nothing to
+	//! narrow down the way an ordinary trader needs class and position.
+	DialogueTree GetTreeForP2PTrader(int p2pTraderID)
+	{
+		if (p2pTraderID < 0)
+			return null;
+
+		foreach (DialogueTree tree : m_AllTrees)
+		{
+			if (!tree || !tree.P2PTraderIDs)
+				continue;
+
+			if (tree.P2PTraderIDs.Find(p2pTraderID) > -1)
+				return tree;
+		}
+
+		return null;
+	}
+
 	DialogueTree GetTreeForAIPatrol(int patrolID, int subID)
 	{
 		DialogueTree patrolWide = null;
@@ -998,11 +1018,18 @@ class DialogueManager
 
 		bool hasAI = tree.AIPatrolID > 0;
 
-		if (!hasNPCs && !hasTraders && !hasAI)
+		//! A player-to-player trader is matched on its own id and lives in no
+		//! particular folder, the same way an AI tree is matched on its patrol.
+		bool hasP2P = tree.P2PTraderIDs && tree.P2PTraderIDs.Count() > 0;
+
+		if (!hasNPCs && !hasTraders && !hasAI && !hasP2P)
 		{
-			LogIssue(fullPath + " has no NPCIDs, no trader keys (TraderIDs / TraderClassNames / TraderPositions) and no AIPatrolID, and isn't in a NPC_<id> or Trader_<name> folder -- skipping. (This also fires if the file failed to parse as valid JSON.)");
+			LogIssue(fullPath + " has no NPCIDs, no trader keys (TraderIDs / TraderClassNames / TraderPositions), no P2PTraderIDs and no AIPatrolID, and isn't in a NPC_<id> or Trader_<name> folder -- skipping. (This also fires if the file failed to parse as valid JSON.)");
 			return;
 		}
+
+		if (hasP2P)
+			Print("[DialogueFramework] [P2P] Loaded P2P trader tree from " + fullPath);
 
 		if (hasAI)
 			Print("[DialogueFramework] [AI] Loaded AI tree from " + fullPath);
