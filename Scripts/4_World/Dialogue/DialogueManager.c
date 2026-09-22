@@ -30,6 +30,10 @@ class DialogueManager
 	//! we can spot is the signature: a line sitting exactly on the limit was
 	//! almost certainly truncated. DialogueForge reads the file itself and so
 	//! can warn properly, before the game ever sees it.
+	//!
+	//! Since 1.6.0 a longer line is stored in pieces (SpeakerTextMore,
+	//! TextMore -- see DialogueText), so each piece is checked on its own.
+	//! Same value as DialogueText.PIECE_BYTES_LIMIT.
 	protected static const int LINE_BYTES_LIMIT = 1023;
 
 	protected ref array<string> m_LoadIssues;
@@ -132,6 +136,24 @@ class DialogueManager
 
 			if (locTree.TreeFile == "" && locTree.TreeID <= 0)
 				LogIssue(path + " has a translation block with neither TreeFile nor TreeID -- it can never be matched to a dialogue tree and was skipped.");
+
+			foreach (DialogueLocEntry treeEntry : locTree.Entries)
+			{
+				if (treeEntry)
+					CheckPiecesLength(path, "translation \"" + treeEntry.Key + "\"", treeEntry.Text, treeEntry.TextMore);
+			}
+		}
+
+		foreach (DialogueLocQuest locQuest : file.Quests)
+		{
+			if (!locQuest)
+				continue;
+
+			foreach (DialogueLocEntry questEntry : locQuest.Entries)
+			{
+				if (questEntry)
+					CheckPiecesLength(path, "quest " + locQuest.QuestID + " translation \"" + questEntry.Key + "\"", questEntry.Text, questEntry.TextMore);
+			}
 		}
 
 		bundle.Merge(file);
@@ -692,7 +714,7 @@ class DialogueManager
 					LogIssue(context + ": node " + checkNode.ID + " has a response (\"" + response.Text + "\") pointing at NextNodeID " + response.NextNodeID + ", which doesn't exist -- likely a typo.");
 			}
 
-			CheckLineLength(context, "node " + checkNode.ID + "'s line", checkNode.SpeakerText);
+			CheckPiecesLength(context, "node " + checkNode.ID + "'s line", checkNode.SpeakerText, checkNode.SpeakerTextMore);
 
 			if (checkNode.SpeakerLines)
 			{
@@ -701,7 +723,7 @@ class DialogueManager
 				{
 					altIndex++;
 					if (altLine)
-						CheckLineLength(context, "node " + checkNode.ID + " alternate line " + altIndex, altLine.Text);
+						CheckPiecesLength(context, "node " + checkNode.ID + " alternate line " + altIndex, altLine.Text, altLine.TextMore);
 				}
 			}
 
@@ -734,8 +756,21 @@ class DialogueManager
 			return;
 
 		int chars = text.LengthUtf8();
-		string cut = context + ": " + where + " is " + bytes + " bytes (" + chars + " characters), which is the most the game will read from one line -- it has almost certainly been CUT OFF. Shorten it, or split it across several nodes. Note a non-English character costs two or three bytes, so a translated line runs out of room much sooner.";
+		string cut = context + ": " + where + " is " + bytes + " bytes (" + chars + " characters), which is the most the game will read from one piece of text -- it has almost certainly been CUT OFF. Save the file with DialogueForge 1.6.0 or later, which stores a long line in pieces the game can read, or split it yourself: put the rest in the matching ...More list. Note a non-English character costs two or three bytes, so a translated line runs out of room much sooner.";
 		LogIssue(cut);
+	}
+
+	//! A line and the pieces it continues in. Each piece has its own 1023-byte
+	//! limit, so each is checked on its own and named in the report.
+	protected void CheckPiecesLength(string context, string where, string first, array<string> more)
+	{
+		CheckLineLength(context, where, first);
+
+		if (!more)
+			return;
+
+		for (int piece = 0; piece < more.Count(); piece++)
+			CheckLineLength(context, where + " (piece " + (piece + 2) + ")", more[piece]);
 	}
 
 	void DumpTreeDiagnostic(DialogueTree tree, string context)

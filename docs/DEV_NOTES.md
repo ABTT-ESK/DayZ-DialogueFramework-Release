@@ -57,6 +57,27 @@ Doing so destroys the object while its method is still on the stack.
 Everything that closes the window or swaps the widget tree is deferred one
 frame with `CallLater`.
 
+**Expansion's quest menu answers its quest-menu event forever.**
+`ExpansionQuestMenu` subscribes `SetQuests` to `GetQuestMenuSI()` in its
+*constructor* and only unsubscribes in its *destructor* -- and the subscription
+keeps the object alive, so it never runs. Every quest menu the player has ever
+opened still answers, and `ExpansionQuestModule` creates a fresh one per
+interaction. Without this mod the stale answers only fill hidden menus; our
+hook turned each one into another conversation window, stacking them behind one
+another with the player's inputs held by every one of them. `MenuCallback`
+(fired when a quest is cancelled) re-runs `SetQuests` with the menu's remembered
+NPC, which is how a window appeared with no NPC involved. The hook now acts
+only for the menu `ExpansionUIManager.GetMenu()` says is on screen, and only
+once per menu.
+
+**Never leave the player without inputs.** `LockPlayerMovement` disables every
+active input except `UAUIBack`. If a window goes away without `OnHide`, the
+player has no movement, no menu key and no way out but killing the game. Three
+things guard it now: only the window that took the inputs may give them back
+(`s_InputLockOwner`), Escape always closes the window, and
+`MissionGameplay.OnUpdate` restores the inputs if the owning window has been off
+screen for half a second (`DialogueFW_WatchInputLock`).
+
 **Any menu opened after the window closes waits 100 ms.** The window's
 `OnHide` runs after `Close()` returns — after the destructor, even — and
 `UnlockPlayerMovement` there shows no cursor and re-enables every active
@@ -97,6 +118,14 @@ the mod root and `$PBOPREFIX$` matches the folder name, so `files[]` entries
 and `CreateWidgets()` paths read `DialogueFramework/Scripts/...` and
 `DialogueFramework/GUI/...`.
 
+**Addon Builder drops any file type it isn't told to copy.** Its *List of
+files to copy directly* defaults to
+`*.emat;*.edds;*.ptc;*.c;*.imageset;*.layout;*.ogg`. A custom font is a `.fnt`
+plus an `.edds`, and only the `.edds` survives the default — the layout loads,
+the font doesn't, and DayZ draws its monospace fallback with no error anywhere.
+Add `*.fnt` (and `*.txt`, for the font's OFL licence, which has to ship with
+it). Check a packed PBO rather than the source folder when a font looks wrong.
+
 **A class must be modded from its own script module.** `modded class X`
 only compiles in the module where `X` is declared — `ExpansionQuestMenu` and
 `ExpansionMarketMenu` are 5_Mission, `ExpansionNPCBase` and `eAIBase` are
@@ -132,6 +161,16 @@ can look. `LINE_BYTES_LIMIT` (1023) only lets it spot the *signature* -- a line
 sitting exactly on the limit was almost certainly cut -- and report the damage.
 DialogueForge reads the JSON itself, so it is the only place that can warn in
 time; its `LINE_BYTES_LIMIT` / `LINE_BYTES_CLOSE` must stay in step with this.
+
+**Since 1.6.0 a long line travels in pieces:** `SpeakerText` +
+`SpeakerTextMore` on nodes, `Text` + `TextMore` on alternate lines and
+translation entries. `DialogueText.Join` rebuilds the line for display and
+each piece crosses the RPC as its own string; proven in game with the same
+tree, 1215–2262-byte lines arrived whole. DialogueForge splits on save (1000
+bytes a piece, measured as written in the file) and joins on open. Any code
+that rebuilds a node from named fields must carry the pieces, or it drops
+everything after the first. Options, quest wording and a tree's own captions
+are still single strings.
 
 **EnforceScript aliases string temporaries.** Two freshly-returned strings
 used in one expression can end up as the same value. Passing two accessor
@@ -309,9 +348,15 @@ The option label is a `MultilineTextWidgetClass` with `wrap 1` — a plain
 bug. The engine does the wrapping; `SizeResponseButton` only decides the font
 size and the button's height.
 
-There is no verified engine call for measuring rendered text, so line count is
-estimated from character count against `RESPONSE_CHAR_RATIO`, the same approach
-`SetSpeakerLine` has always used for the NPC's line. `RESPONSE_WRAP_SAFETY`
+Line count here is estimated from character count against
+`RESPONSE_CHAR_RATIO`, the same approach `SetSpeakerLine` uses for the NPC's
+line. That was written believing the engine had no way to measure rendered
+text, which is **wrong**: `TextWidget.GetTextSize(out int sx, out int sy)` is in
+the game's own `scripts.pbo`, documented there as "Returns text size in
+pixels". The reputation icon uses it (see *The reputation icon* below). These
+two estimates predate that and still work, so they have not been moved over;
+they are the obvious place to go if a font makes wrapping misjudge a line.
+`RESPONSE_WRAP_SAFETY`
 biases the estimate toward *more* lines on purpose: word wrapping always breaks
 earlier than a raw character count suggests, and an over-tall button is
 cosmetic while an under-tall one clips text — which is the bug being fixed.
@@ -334,6 +379,81 @@ buttons — miss it on a new screen and that screen's long options will overlap.
 Line count is deliberately **not** capped after the shrink loop. If text still
 needs more than `RESPONSE_GROW_LINES` at the minimum font, the button just
 keeps growing. Truncation is the failure this code exists to prevent.
+
+## The middle of the window
+
+The layout pins `ResponseScroll` at `0.60` of the panel and `SpeakerLineScroll`
+at `0.13` with a height of `0.17`. The band between them belongs to the quest
+item strips (`RequiredStrip` / `RewardStrip` at `ITEM_AREA_TOP`). On any screen
+without item pictures that band is simply empty — the gap players reported.
+
+`FitSpeechBox` closes it. It sizes the speech box to the text's measured height,
+clamped between one line and what is left after the options keep what they
+need (`m_ContentHeightPx`, never more than the layout's `m_ScrollH`), then
+`LayoutResponseArea(0)` puts the options directly under it. `LayoutResponseArea`
+holds the bottom edge still, so the options only ever move up.
+
+Three rules keep this out of trouble:
+
+- **Strips win.** While either strip is visible, `RestoreSpeechBox` puts the
+  box back to the layout's `m_SpeechH` — a box grown to fit a long line would
+  run straight through the item pictures, which sit at a fixed spot.
+  `LayoutStrips` calls it again before placing them, because the speaker line
+  is usually set before the strips are shown.
+- **Fit twice.** The first fit runs before the buttons exist, so
+  `m_ContentHeightPx` is the previous screen's. `ReapplyResponseSizes` calls
+  `SizeSpeakerLine` again once the buttons have a real height. That is not a
+  loop: `LayoutResponseArea` schedules nothing.
+- **Resizing moves the view**, so `SizeSpeakerLine` clears
+  `m_SpeakerScrollShown` — see below for why that matters.
+
+`m_SpeechX/Y/W/H` hold the layout's own values, read once in `Init`. Nothing
+else should hardcode them.
+
+## Scrolling the spoken line
+
+**The mouse wheel does not reach script over a `ScrollWidget`.** The engine
+handles it and moves the view a chunk at a time, which is what makes a long
+speech skip whole lines. `OnMouseWheel` is never called for it — proved by a
+run with an unconditional `Print` as the first line of the override, which
+never appeared in the client log while the view scrolled on screen. Setting a
+step size inside `OnMouseWheel` therefore changes nothing, however low it is.
+
+So `UpdateSpeakerScroll` works the other way round: it runs every frame from
+`Update`, compares `GetVScrollPos()` with the spot it last set itself, and
+treats a move larger than `SPEAKER_SCROLL_JUMP_PX` as the engine's wheel
+handling. It puts the view straight back and walks that notch itself at
+`SPEAKER_SCROLL_STEP_PX` a notch, `SPEAKER_SCROLL_CATCHUP` deciding how fast
+the view catches up.
+
+Three sizes matter and they must stay ordered:
+
+- moves under `SPEAKER_SCROLL_SETTLE_PX` are the scroll rounding off what we
+  set it to — ignored, or a glide would cancel itself every frame;
+- moves between that and `SPEAKER_SCROLL_JUMP_PX` are the player dragging the
+  bar, which already looks right, so the glide is dropped and the drag
+  followed;
+- anything larger is a wheel notch.
+
+The engine's notch size is never told to us, so the smallest jump seen
+measures it (`m_SpeakerEngineNotchPx`). A fast spin arrives as one big jump,
+and dividing by that measurement is what makes it travel further than a
+single nudge.
+
+`ScrollSpeed()` multiplies both the step and the catch-up: the player's own
+setting, or `MenuConfig.ScrollSpeed` when they have not chosen one, clamped to
+`SCROLL_SPEED_MIN`/`MAX`. Catch-up is clamped again to
+`SPEAKER_CATCHUP_MIN`/`MAX` so a fast setting still glides instead of jumping.
+
+Adding a field to `MenuConfig` means **four** places, not one: the field and
+its `Sanitize` clamp, an `UpgradeFromOlderVersion` branch with the version
+bumped, and `OnSend`/`OnRecieve` — the RPC is positional, so a field written
+and not read (or read in the wrong order) corrupts every value after it.
+`test_scrollspeed.py` checks the two lists match.
+
+Resizing the text box moves the view on its own, so `ReapplySpeakerLineSize`
+clears `m_SpeakerScrollShown` — without that, the resize reads as a wheel
+notch and the speech creeps on its own.
 
 ## Localization
 
@@ -441,7 +561,10 @@ added the per-screen `*BackTexts` fields.
 MenuConfig versions: 1 added `WindowBorderThickness` and
 `VisitedResponseOpacity`; 2 added `FontStyle`; 3 added `ShowResponseIcons`; 4
 added `ShowLanguageButton`; 5 added `ScaleTextWithPanel`; 6 added
-`ShowErrorNotifications`. `CURRENT_VERSION` is **6**.
+`ShowErrorNotifications`; 7 added `ScrollSpeed`; 8 added
+`ShowReputationNotifications`; 9 added `BookTabName` and `BookPageTitle`; 10
+added the three `BookColumn*` headings; 11 split `FontStyle` into `Font` and
+`TextSize`, folding the old value into the pair. `CURRENT_VERSION` is **11**.
 
 `Localization\*.json` files are written by DialogueForge, not upgraded in place
 — they only ever hold keys and text, so there is nothing to migrate.
@@ -663,3 +786,77 @@ It only sees this mod's own files, so anything inherited from
 `UIScriptedMenu`, a CF module base, or the engine has to be added to
 `KNOWN_EXTERNAL` at the top of the script. If it reports an undefined call for
 something that plainly exists, that is what to check first.
+
+## The reputation icon
+
+The icon sits after the name row's text, at *where the text starts + how wide
+it really is + a fixed gap*. The width comes from
+`TextWidget.GetTextSize(out int sx, out int sy)`, so it is right in any font.
+
+It used to be `characters × row height × NAME_CHAR_RATIO`. That ratio was tuned
+for Metron Book, and the first wider font put the icon on top of the last
+letter. `NAME_CHAR_RATIO` survives only as the fallback for a frame where the
+text reads zero width because it has not been laid out yet.
+
+That frame is real: the first line of a conversation can be shown before
+layout. So `ApplySpeakerName` arms `m_RepIconRetries`, and `Update` re-places
+the icon each frame until a measurement comes back or the retries run out. It
+is armed only on a real change of text, never from the retry itself, or a name
+that could never be measured would re-arm forever.
+
+The gap is `REP_ICON_GAP` of the icon's own size, which is a share of the row
+height, so the air between word and icon looks the same at any text size.
+
+## Adding a font
+
+A typeface can only come from a `.layout` file — DayZ has `SetFontSize` and
+`SetTextExactSize` but no `SetFont` — so each font is its own files in
+`GUI/fonts/` plus a set of generated layouts that point at them.
+
+1. **A licence that allows bundling.** SIL OFL or Apache 2.0; every Google
+   Fonts family is one or the other. The licence file ships beside the font.
+2. **A static TTF.** Pin a variable font to its Regular instance first
+   (`fontTools.varLib.instancer`). The editor has only been proven on static
+   files.
+3. **Convert it in Arma Reforger Tools, not DayZ Tools.** Both Workbenches
+   carry the same font editor, but DayZ Tools' crashes the moment a `.ttf` is
+   opened — an access violation inside `workbenchApp.exe` itself, at the same
+   address every time, whatever the font. In a Reforger project, double-click
+   the TTF to open the Font Editor, then:
+   - **Font type:** Distance field. **Font size:** 24, the default. Every
+     text widget has an exact pixel size in the layouts, so this only sets
+     detail per letter; DayZ's own Metron Light is also 24.
+   - **Range selector:** everything the typeface offers — at least Ascii,
+     Latin supplement and Latin extended-A, plus Cyrillic if it has it.
+     Together those are every letter of every language the mod ships.
+   - **Custom range 8208 to 8231** (decimal for U+2010–U+2027: dashes, curly
+     quotes, the ellipsis and the bullet), then **Add**; and **8364** (€).
+     None of these are in the presets, and authors do use them — the em dash
+     turns up in real dialogue.
+   - **Generate Bitmap**, then save. That writes `<name>.fnt` and
+     `<name>.tga`; Workbench imports the `.tga` as `<name>.edds`.
+   - A `.tga` made in a folder gets the `TextureFonts` preset (BC4, no
+     mipmaps); one imported from the project root got `TextureUnspecified`
+     (BC7). Both load in DayZ — Inter as BC4 was used in game with no errors.
+4. **Copy `<name>.fnt`, `<name>.edds` and `<name>.edds.meta`** into
+   `GUI/fonts/`. Not the `.tga`: it is a build intermediate, it is large, and
+   Addon Builder does not pack it.
+5. **Register it in three places that must agree:** `FONTS` in
+   `tools/gen_layout_variants.py`, with `"russian"` set to whether the atlas
+   really carries Cyrillic; `DialogueMenuFont` in `DialogueMenuConfig.c`; and
+   `FONTS` in DialogueForge, whose description says whether it covers Russian.
+   Then run the generator.
+6. **Pack with `*.fnt` on Addon Builder's copy list** (see the gotcha above),
+   and check the packed PBO actually contains the `.fnt`.
+
+The `.fnt` is Enfusion's `FNT5` format: `FORM` chunks named `HEAD`, `GLPS`,
+`TCRD` and `KERN`, with no padding after an odd-sized chunk. `GLPS` lists the
+code points the atlas covers as runs of *first code point, count* — reading it
+is how to tell for certain whether a converted font carries Russian or
+accents, rather than trusting what was ticked. A character a font lacks is
+looked up in DayZ's fallback, `sdf_NotoSansCJK-Light28`, whose path is
+hard-coded in the game's GUI code. That covers Chinese, Japanese and
+Western-European accents, but not Polish, Czech or Hungarian letters, Cyrillic
+or the em dash — those show as the `U+25A1` box every converted font carries.
+DayZ's own six fonts carry all of them. DayZ's bitmap fonts are the older
+`FNT3`: the same chunks, but each `GLPS` run is a 16-bit start and count.

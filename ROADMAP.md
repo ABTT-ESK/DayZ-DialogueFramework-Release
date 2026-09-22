@@ -7,21 +7,18 @@ do. Nothing here has a date attached.
 
 ## Next up
 
-### Dialogue for any friendly AI
+### Dialogue for AI you didn't spawn through this mod
 
-Right now a character can talk only if Expansion already opens a menu for
-them — quest NPCs and traders. Everyone else is silent.
+AI spawned through the mod's own `AIPatrols.json` can talk: each patrol
+carries an ID and dialogue locks onto the exact unit. DialogueForge's Import
+tab will copy your existing Expansion patrols across for you.
 
-The goal is dialogue for **any** friendly AI: guards, camp residents,
-civilians, anyone a server owner places. It's the most requested shape of
-"more dialogue" and it also removes the dependency on hooking Expansion's
-menus.
-
-This needs a custom interaction rather than a hook, since there's no
-existing menu to intercept — a "Talk" action on friendly AI, plus a
-server-side path to open the window. Expect it to key on world position and
-entity class, the same way traders do, since a plain AI has no quest or
-trader identity to match against.
+What's still missing is talking to AI the mod didn't spawn — a guard placed
+by another mod, or one spawned at runtime by something else. That needs a
+custom interaction rather than a patrol link, since there's no menu to
+intercept and no ID to match: a "Talk" action on friendly AI, plus a
+server-side path to open the window, keyed on world position and entity class
+the way traders are.
 
 ---
 
@@ -34,9 +31,9 @@ of these" when the player will receive one. Needs a label to say so.
 **Item preview framing.** Reward thumbnails use a fixed camera, so unusually
 large or small items can sit awkwardly in their tile.
 
-**Conditions beyond quest completion.** Responses can currently be gated on
-a completed quest. Gating on faction, reputation, items carried, or time of
-day would open up considerably more roleplay.
+**Conditions beyond quest and reputation.** Responses can be gated on a
+completed quest, a quest's stage, and a reputation value. Gating on faction,
+items carried, or time of day would open up more roleplay still.
 
 ---
 
@@ -49,10 +46,20 @@ voice pack is deliberately tiny and separate so you republish only that, and
 never re-sign the scripts mod. This is a DayZ constraint rather than a
 design choice.
 
-**Fonts can't be changed from `MenuConfig.json`.** The engine only reads a
-font from a `.layout` file and offers no runtime call to change one. Use
-`LayoutOverride` with your own layout file — colours, sizes and position
-still come from the config.
+**Only the fonts the mod ships can be picked from `MenuConfig.json`.** The
+engine reads a typeface from a `.layout` file and offers no runtime call to
+change one — `SetFontSize` exists, `SetFont` does not. So every font on offer
+has to be a layout baked into the mod ahead of time, which is what `Font` and
+`TextSize` pick between. For a typeface that isn't on that list, use
+`LayoutOverride` with your own layout file; colours, sizes and position still
+come from the config.
+
+**The picked font has to cover the language being read.** DayZ's own six
+carry every letter of every language the mod ships, so they are safe
+everywhere. A character a font lacks is drawn from DayZ's built-in fallback,
+`sdf_NotoSansCJK-Light28` — which covers Chinese, Japanese and Western
+European accents, but not Polish, Czech or Hungarian letters and not
+Cyrillic. Those show as boxes in a font that lacks them.
 
 **Trader dialogue is per configured trader, not per person.** Two traders
 sharing a definition, an entity class *and* a position are

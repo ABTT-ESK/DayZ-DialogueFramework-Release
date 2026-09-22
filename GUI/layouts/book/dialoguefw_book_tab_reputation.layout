@@ -1,0 +1,190 @@
+FrameWidgetClass DialogueFW_BookTabReputation {
+ ignorepointer 1
+ position 0 0
+ size 1920 1080
+ halign center_ref
+ valign center_ref
+ hexactpos 0
+ vexactpos 0
+ hexactsize 1
+ vexactsize 1
+ priority 1
+ scriptclass "DialogueFW_BookTabReputationController"
+ {
+  PanelWidgetClass book_reputation_tab {
+   visible 1
+   ignorepointer 1
+   position 0 200
+   size 937 579
+   halign center_ref
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 2
+   {
+    TextWidgetClass reputation_title {
+     color 0.2039 0.5961 0.8588 1
+     position 58 10
+     size 500 30
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     scriptclass "ViewBinding"
+     style None
+     text "Where you stand"
+     font "gui/fonts/etelkatextpro22"
+     "exact text" 1
+     "text halign" left
+     "text valign" center
+     {
+      ScriptParamsClass {
+       Binding_Name "PageTitle"
+      }
+     }
+    }
+    TextWidgetClass reputation_player {
+     color 0 0 0 1
+     position 558 10
+     size 320 30
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     scriptclass "ViewBinding"
+     style None
+     text ""
+     font "gui/fonts/etelkatextpro22"
+     "exact text" 1
+     "text halign" right
+     "text valign" center
+     {
+      ScriptParamsClass {
+       Binding_Name "PlayerName"
+      }
+     }
+    }
+    PanelWidgetClass reputation_headings {
+     color 0 0 0 0
+     position 58 44
+     size 820 26
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style blank
+     {
+      TextWidgetClass heading_name {
+       color 0 0 0 1
+       position 0 0
+       size 300 26
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       scriptclass "ViewBinding"
+       style None
+       text "Name"
+       font "gui/fonts/etelkatextpro22"
+       "exact text" 1
+       "text halign" left
+       "text valign" center
+       {
+        ScriptParamsClass {
+         Binding_Name "ColumnName"
+        }
+       }
+      }
+      TextWidgetClass heading_status {
+       color 0 0 0 1
+       position 340 0
+       size 320 26
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       scriptclass "ViewBinding"
+       style None
+       text "Status"
+       font "gui/fonts/etelkatextpro22"
+       "exact text" 1
+       "text halign" left
+       "text valign" center
+       {
+        ScriptParamsClass {
+         Binding_Name "ColumnStatus"
+        }
+       }
+      }
+      TextWidgetClass heading_score {
+       color 0 0 0 1
+       position 700 0
+       size 120 26
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       scriptclass "ViewBinding"
+       style None
+       text "Reputation"
+       font "gui/fonts/etelkatextpro22"
+       "exact text" 1
+       "text halign" right
+       "text valign" center
+       {
+        ScriptParamsClass {
+         Binding_Name "ColumnScore"
+        }
+       }
+      }
+     }
+    }
+    PanelWidgetClass reputation_rule {
+     color 0 0 0 0.35
+     position 58 72
+     size 820 2
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style blank
+    }
+    ScrollWidgetClass reputation_list_scroller {
+     visible 1
+     ignorepointer 0
+     keepsafezone 1
+     position 58 80
+     size 830 490
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style blank
+     "Scrollbar V" 1
+     {
+      WrapSpacerWidgetClass reputation_list_content {
+       ignorepointer 0
+       keepsafezone 1
+       color 0 0 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       scriptclass "ViewBinding"
+       Margin 0
+       "Size To Content V" 1
+       {
+        ScriptParamsClass {
+         Debug_Logging 0
+         Binding_Name "RepRows"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

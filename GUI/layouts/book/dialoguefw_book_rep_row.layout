@@ -1,0 +1,88 @@
+FrameWidgetClass DialogueFW_BookRepRow {
+ inheritalpha 0
+ ignorepointer 1
+ position 0 0
+ size 820 34
+ hexactpos 0
+ vexactpos 0
+ hexactsize 1
+ vexactsize 1
+ fixaspect fixwidth
+ scriptclass "DialogueFW_BookRepRowController"
+ {
+  PanelWidgetClass rep_row {
+   color 0 0 0 0
+   size 820 34
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style blank
+   {
+    TextWidgetClass rep_who {
+     color 0.2039 0.5961 0.8588 1
+     position 0 0
+     size 300 34
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     scriptclass "ViewBinding"
+     style None
+     text "Name"
+     font "gui/fonts/etelkatextpro22"
+     "exact text" 1
+     "text halign" left
+     "text valign" center
+     {
+      ScriptParamsClass {
+       Binding_Name "RepWho"
+      }
+     }
+    }
+    TextWidgetClass rep_rank {
+     color 0 0 0 1
+     position 340 0
+     size 320 34
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     scriptclass "ViewBinding"
+     style None
+     text "Rank"
+     font "gui/fonts/etelkatextpro22"
+     "exact text" 1
+     "text halign" left
+     "text valign" center
+     {
+      ScriptParamsClass {
+       Binding_Name "RepRank"
+      }
+     }
+    }
+    TextWidgetClass rep_score {
+     color 0 0 0 1
+     position 700 0
+     size 120 34
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     scriptclass "ViewBinding"
+     style None
+     text "0"
+     font "gui/fonts/etelkatextpro22"
+     "exact text" 1
+     "text halign" right
+     "text valign" center
+     {
+      ScriptParamsClass {
+       Binding_Name "RepScore"
+      }
+     }
+    }
+   }
+  }
+ }
+}

@@ -7,6 +7,64 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.6.0]
+
+### Added
+- **Long lines.** A spoken line or translation can be any length. The game
+  cuts a line at about 1000 characters (fewer in Russian or Chinese), so
+  longer ones are stored in pieces the mod joins back together. DialogueForge
+  1.6.0 does the splitting for you. Options and quest wording still need to
+  stay short.
+- **Reputation updates.**
+  - **Icons on the reputation marker.** Each rank can show a face or a thumb
+    after the NPC's name: `"Icon": "HAPPY"`, `"NEUTRAL"`, `"ANGRY"`,
+    `"THUMBUP"`, `"THUMBSIDE"` or `"THUMBDOWN"`. Icons take the name's
+    colour. A rank can show an icon, a word, both or neither.
+  - **A standing page in Expansion's book** showing where the player stands
+    with every character: name, rank and number. It costs the server nothing
+    and hides itself on servers with no reputations set up.
+  - **Your own wording for the book page:** `"BookTabName"`, `"BookPageTitle"`,
+    `"BookColumnName"`, `"BookColumnStatus"` and `"BookColumnReputation"`.
+    Leave one empty and it uses the mod's translated default.
+  - **Set `"ReputationMax"`** on a character and the book page shows
+    *10 / 100* instead of *10*. Display only.
+  - **A pop-up naming who a choice pleased or annoyed**, like *Yefim +5* or
+    *Smitty −2*. Set the server default with
+    `"ShowReputationNotifications"`; players can switch it under
+    **Settings**.
+  - **Reputation for finishing a quest.** Add `"RepOnComplete"` to a quest's
+    `QuestText` entry: `INCREASE`, `DECREASE` or `SET` on any reputation,
+    applied when the quest is handed in.
+- **Fonts.** `"Font"` picks from thirteen typefaces and `"TextSize"` picks
+  `NORMAL`, `LARGE` or `COMPACT`. Any pairing works, with no repacking.
+  - **DayZ's own six:** `DEFAULT`, `LIGHT`, `BLACK`, `METRON`, `SERIF` and
+    `ETELKA`. They cover every language the mod ships.
+  - **Seven new:** `INTER`, `GARAMOND` and `NOTOSERIF` cover Russian;
+    `CONDENSED`, `ZILLA`, `TYPEWRITER` and `BLACKOPS` don't. All are
+    open-licence, and their licences ship with them.
+  - The old `"FontStyle"` still works and converts itself on the first start.
+- **Scroll speed.** `"ScrollSpeed"` in `MenuConfig.json`, from 0.25 to 4.0.
+  Players can set their own under **Settings**, and theirs wins.
+- **The settings button is a cog** instead of an asterisk.
+
+### Fixed
+- **A conversation window could open by itself and lock the player's
+  controls** (reported on 1.5.0). It now only opens when the player talks to
+  someone, and only one at a time.
+- **Controls can't be left switched off.** If a window closes unexpectedly,
+  they come back within half a second.
+- **Escape closes the conversation** from any screen.
+- **Long speeches can be read to the end.** The last lines no longer sit out
+  of reach.
+- **The mouse wheel scrolls speeches smoothly.**
+- **No more gap between the NPC's line and the options.** The options now
+  sit right under what the NPC says.
+- **The player's text size applies to the whole window**, not just the
+  options.
+- **The reputation icon no longer overlaps the name** in wider fonts.
+
+---
+
 ## [1.5.0]
 
 ### Added

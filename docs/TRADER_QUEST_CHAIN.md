@@ -182,10 +182,10 @@ trader map file.
    in one click.
 
 A line you can edit is in
-[`OptionalNewTrader.map.txt`](../examples/TraderQuestChain/OptionalNewTrader.map.txt).
-Change the position (and the definition name, if yours differs), then save it
-into that folder as a `.map` file — drop the `.txt`, and don't leave comment
-lines in it, because Expansion reads every line as a trader.
+[`OptionalNewTrader.md`](../examples/TraderQuestChain/OptionalNewTrader.md).
+Change the position (and the definition name, if yours differs), then save
+just that line into that folder as a `.map` file — Expansion reads every line
+of it as a trader, so nothing else goes in it.
 
 > If you use the short `x z` form, DialogueForge will say the position has no
 > height and fill in only the definition name and entity class. That is fine —

@@ -49,10 +49,19 @@ dialogue trees.
   "WindowBorderThickness": 2,
   "VisitedResponseOpacity": 0.4,
   "FontStyle": "DEFAULT",
+  "Font": "DEFAULT",
+  "TextSize": "NORMAL",
   "ShowResponseIcons": false,
   "ShowLanguageButton": true,
   "ScaleTextWithPanel": false,
   "ShowErrorNotifications": true,
+  "ScrollSpeed": 1.0,
+  "ShowReputationNotifications": true,
+  "BookTabName": "",
+  "BookPageTitle": "",
+  "BookColumnName": "",
+  "BookColumnStatus": "",
+  "BookColumnReputation": "",
   "LayoutOverride": ""
 }
 ```
@@ -138,40 +147,88 @@ jumping to a different hue.
 The state resets when the conversation closes, so options are fresh next
 time the player talks to that NPC.
 
-## Fonts and text size: `FontStyle`
+## Fonts and text size: `Font` and `TextSize`
 
-Four built-in styles, no repacking needed:
+Two separate settings, so any typeface can be had at any size:
 
-| `FontStyle` | Look |
+| `Font` | Look |
 |---|---|
-| `DEFAULT` | Metron Book, standard sizes |
+| `DEFAULT` | Metron Book — what DayZ uses everywhere |
 | `LIGHT` | Metron Light — thinner, less shouty |
-| `LARGE` | Metron Book at 120% — easier to read at distance or on a TV |
-| `COMPACT` | Metron Book at 85% — fits more options without scrolling |
+| `BLACK` | Metron Black — heavy, reads at a distance |
+| `METRON` | Metron — the plain weight, a touch wider |
+| `SERIF` | Amor Serif — a book face, for lore-heavy servers |
+| `ETELKA` | Etelka Text — what Expansion's own menus use |
+
+These ship inside the mod as their own typefaces:
+
+| `Font` | Look | Russian |
+|---|---|---|
+| `INTER` | Inter — clean modern sans | **Yes** |
+| `GARAMOND` | EB Garamond — classic book serif | **Yes** |
+| `NOTOSERIF` | Noto Serif — sturdy, readable serif | **Yes** |
+| `CONDENSED` | Condensed Sans — tall and narrow | No |
+| `ZILLA` | Zilla Slab — chunky slab serif | No |
+| `TYPEWRITER` | Special Elite — worn typewriter | No |
+| `BLACKOPS` | Black Ops One — military stencil | No |
+
+**A font without Russian draws Russian as boxes.** If your server has Russian
+players, pick one marked Yes. Chinese and Japanese are drawn from DayZ's own
+CJK font whatever you pick.
+
+| `TextSize` | Look |
+|---|---|
+| `NORMAL` | The size the window was designed at |
+| `LARGE` | 120% — easier to read at distance or on a TV |
+| `COMPACT` | 85% — fits more options without scrolling |
 
 ```json
-"FontStyle": "LARGE"
+"Font": "SERIF",
+"TextSize": "LARGE"
 ```
 
-**Nothing to build.** All four styles ship inside the mod as ready-made
-layouts — set the value, restart, done. DayZ reads fonts only from `.layout`
-files and has no runtime call to change one, which is why they're pre-built
-rather than assembled on the fly.
+**Nothing to build.** Every pairing ships inside the mod as a ready-made
+layout — set the two values, restart, done. DayZ reads a typeface only from a
+`.layout` file and has no runtime call to change one, which is why they are
+pre-built rather than assembled on the fly.
 
-The two typefaces are what DayZ itself ships. `LARGE` and `COMPACT` change
-text sizes rather than typeface, which in practice makes a bigger difference
-to how the window feels.
+The first six are fonts DayZ itself ships, and they carry every letter of
+every language the mod ships — Polish, Czech, Hungarian and Russian
+included. The rest are the mod's own; check the Russian column above before
+you pick one.
+
+**Metron Book and Metron Light are the crisp two.** They ship as scalable
+atlases, so they stay sharp at any size. The other four are fixed-size
+images the game scales, so they soften a little at `LARGE`. Worth a look in
+game before committing to one.
+
+### If you used `FontStyle`
+
+`FontStyle` was the single setting that did both jobs, and it still works.
+The first time a server starts on 1.6.0 it is folded into the new pair and
+your file is rewritten:
+
+| Old `FontStyle` | Becomes |
+|---|---|
+| `DEFAULT` | `Font: DEFAULT`, `TextSize: NORMAL` |
+| `LIGHT` | `Font: LIGHT`, `TextSize: NORMAL` |
+| `LARGE` | `Font: DEFAULT`, `TextSize: LARGE` |
+| `COMPACT` | `Font: DEFAULT`, `TextSize: COMPACT` |
+
+Editing `FontStyle` by hand afterwards still works too, as long as you leave
+`Font` and `TextSize` at their defaults — so a guide written for an older
+version has not stopped being true.
 
 If a style fails to load for any reason, the mod logs it and falls back to
 `DEFAULT` rather than showing an empty window.
 
-## Anything else: `LayoutOverride`
+## A font the mod doesn't ship: `LayoutOverride`
 
-**Fonts can't be changed from the config.** The engine only reads a font
-from a `.layout` file, and there's no runtime script call to swap it — this
-is a DayZ limitation, not a choice.
+`Font` covers the thirteen typefaces the mod ships. For anything else — a
+face you licensed, or one from another addon — the engine gives no runtime
+call to set a typeface, so it has to come from a `.layout` file of your own.
 
-The escape hatch is `LayoutOverride`: point it at your own `.layout` file
+`LayoutOverride` is that escape hatch: point it at your own `.layout` file
 shipped inside your own addon, and the mod builds the window from that
 instead of the built-in one.
 
@@ -255,13 +312,66 @@ using `0.6` as the reference. A panel at `0.9` gets text 1.5× the size, one at
 unreadable or absurd. It's **off by default**, so updating the mod changes
 nothing until you turn it on.
 
-`FontStyle` still sets the base size, and the two combine: `LARGE` on a wide
+`TextSize` still sets the base size, and the two combine: `LARGE` on a wide
 panel is bigger than `LARGE` alone.
 
 > **Custom layouts:** the option label has to be a `MultilineTextWidgetClass`
 > with `wrap 1` for any of this to work. If your `LayoutOverride` uses a plain
 > `TextWidgetClass` the text will still be clipped to one line — copy the
 > widget block from `dialogue_response_button.layout`.
+
+## How fast the wheel scrolls a long speech
+
+`"ScrollSpeed": 1.0` sets how far one notch of the mouse wheel moves a speech
+that is too long for its box. `2.0` covers twice as much ground per notch,
+`0.5` half. Anything outside `0.25` – `4.0` is ignored and `1.0` is used.
+
+This is your default, not a rule. Players who want it faster or slower set
+their own under **Settings** in the conversation window, and theirs wins —
+their choice is saved on their own machine and follows them to any server
+running the mod. Whatever you set here is what a player sees until they
+change it, and it is what they get back if they pick *Reset to the server's
+settings*.
+
+## Telling players who a choice pleased or annoyed
+
+`"ShowReputationNotifications": true` (the default) puts a short pop-up on
+screen when a choice a player made moves someone's standing — the character's
+name and how far it moved, *Yefim +5*. The name is read out of the reputation
+key, so `yefim_rep` shows as *Yefim*.
+
+Only changes the player caused by picking something show. Reputation your
+quests hand out with `RepOnComplete`, or anything the server moves elsewhere,
+stays quiet — a pop-up in the middle of a hand-in reads as noise.
+
+Set it to `false` and nobody sees them. Either way each player can override it
+for themselves under **Settings** in the conversation window.
+
+## The standing page in Expansion's book
+
+If you have Expansion's book, players get a page listing where they stand with
+every character on the server at once — the character, the rank they are on,
+and the number behind it. It is built from what the player's own game already
+knows, so it costs the server nothing, and it rebuilds each time the page is
+opened. On a server with no reputations set up the tab doesn't appear at all.
+
+Five fields word it:
+
+| Field | What it names | Left empty |
+|---|---|---|
+| `BookTabName` | The tab in the book | *Standing* |
+| `BookPageTitle` | The heading on the page | *Where you stand* |
+| `BookColumnName` | The first column | *Name* |
+| `BookColumnStatus` | The second column | *Status* |
+| `BookColumnReputation` | The third column | *Reputation* |
+
+**Leaving one empty is not the same as typing the English into it.** Empty
+means each player reads that word in their own language; typing something in
+picks one wording for everyone, whatever language they play in.
+
+Give a character `ReputationMax` in its dialogue tree and its row reads
+**10 / 100** instead of a bare *10*, so a player can see how far there is left
+to go.
 
 ## Telling players when something is wrong
 

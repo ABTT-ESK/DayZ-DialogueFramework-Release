@@ -19,8 +19,19 @@ class DialogueQuestText
 
 	string RewardSelectText = "";
 
+	//! What finishing this quest does to the player's reputation. The same
+	//! ops a dialogue button uses -- Increase by, Decrease by, Set to -- so a
+	//! quest can raise the giver's standing and lower a rival's at once.
+	//!
+	//! Deliberately NOT sent to clients: it is applied on the server when the
+	//! quest is handed in, and a client has no use for it. Anyone adding it
+	//! to OnSend must add it to OnRecieve in the same place, or every field
+	//! after it arrives in the wrong slot.
+	ref array<ref DialogueVarOp> RepOnComplete;
+
 	void DialogueQuestText()
 	{
+		RepOnComplete = new array<ref DialogueVarOp>;
 		AcceptTexts = new array<string>;
 		DeclineTexts = new array<string>;
 		TurnInTexts = new array<string>;
@@ -38,6 +49,9 @@ class DialogueQuestText
 
 	void Sanitize()
 	{
+		if (!RepOnComplete)
+			RepOnComplete = new array<ref DialogueVarOp>;
+
 		if (!AcceptTexts)
 			AcceptTexts = new array<string>;
 		if (!DeclineTexts)
@@ -133,7 +147,7 @@ class DialogueQuestText
 
 class DialogueQuestTextFile
 {
-	static const int CURRENT_VERSION = 2;
+	static const int CURRENT_VERSION = 3;
 	int ConfigVersion = 0;
 
 	ref array<ref DialogueQuestText> Quests;

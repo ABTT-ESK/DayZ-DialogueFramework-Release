@@ -42,11 +42,22 @@ modded class MissionBase
 		{
 			DialogueP2PSession session = DialogueP2PSession.GetInstance();
 
+			//! No conversation waiting means this menu was entered without a
+			//! trader behind it -- a stale or already-used session. Opening
+			//! anyway gives an empty box that says nothing and offers nothing,
+			//! while holding the player's controls.
+			if (!session.m_PendingTree)
+			{
+				Print("[DialogueFramework] [P2P] [WARN] The P2P conversation window was asked for with no conversation waiting -- not opening it.");
+				return super.CreateScriptedMenu(id);
+			}
+
 			//! NPC ID -1, the same as a market trader: a P2P trader has no
 			//! quest-giver identity either, so SHOW_QUEST_LIST is guarded and
 			//! quests are given by ID.
 			DialogueWindowMenu menu = new DialogueWindowMenu(session.m_PendingTree, -1, session.m_PendingName);
 			menu.DialogueFW_SetP2PTrader(true, session.m_PendingTraderID);
+			DialogueWindowLauncher.GetInstance().TrackWindow(menu);
 			return menu;
 		}
 

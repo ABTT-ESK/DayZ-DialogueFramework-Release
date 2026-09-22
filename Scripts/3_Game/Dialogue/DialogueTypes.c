@@ -25,6 +25,50 @@ class DialogueActionType
 	static const string OFFER_QUEST = "OFFER_QUEST";
 }
 
+//! The game's JSON reader keeps at most 1023 bytes of any one string. A longer
+//! line is stored as its start plus the rest in pieces ("...More"), each short
+//! enough to survive. The pieces travel to the client as they are and are only
+//! joined there, for display, so no long string crosses the network either.
+class DialogueText
+{
+	static const int PIECE_BYTES_LIMIT = 1023;
+
+	static string Join(string first, array<string> more)
+	{
+		if (!more || more.Count() == 0)
+			return first;
+
+		string joined = first;
+		foreach (string piece : more)
+			joined = joined + piece;
+
+		return joined;
+	}
+
+	static void WritePieces(ScriptRPC rpc, array<string> pieces)
+	{
+		rpc.Write(pieces.Count());
+		foreach (string piece : pieces)
+			rpc.Write(piece);
+	}
+
+	static bool ReadPieces(ParamsReadContext ctx, array<string> pieces)
+	{
+		int count;
+		if (!ctx.Read(count)) return false;
+
+		pieces.Clear();
+		for (int i = 0; i < count; i++)
+		{
+			string piece;
+			if (!ctx.Read(piece)) return false;
+			pieces.Insert(piece);
+		}
+
+		return true;
+	}
+}
+
 class DialogueVarOp
 {
 	string Name;
@@ -147,17 +191,94 @@ class DialogueRepTier
 	int Threshold = 0;
 	string Label;
 
+	//! Which face shows at this rank: "", "HAPPY", "NEUTRAL" or "ANGRY".
+	//! Kept apart from the Label on purpose -- the label is the owner's own
+	//! word for the rank, "Cool" or "Pissed" or anything else, and the face
+	//! is picked separately, so the two never have to agree.
+	string Icon;
+
 	void OnSend(ScriptRPC rpc)
 	{
 		rpc.Write(Threshold);
 		rpc.Write(Label);
+		rpc.Write(Icon);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
 	{
 		if (!ctx.Read(Threshold)) return false;
 		if (!ctx.Read(Label)) return false;
+		if (!ctx.Read(Icon)) return false;
 		return true;
+	}
+
+	//! The image file for this tier's face, or "" for no face at all.
+	string IconFile()
+	{
+		string wanted = Icon;
+		wanted.ToUpper();
+
+		if (wanted == "HAPPY")
+			return "icon_rep_happy_ca";
+		if (wanted == "NEUTRAL")
+			return "icon_rep_neutral_ca";
+		if (wanted == "ANGRY")
+			return "icon_rep_angry_ca";
+		if (wanted == "THUMBUP")
+			return "icon_rep_thumbup_ca";
+		if (wanted == "THUMBSIDE")
+			return "icon_rep_thumbside_ca";
+		if (wanted == "THUMBDOWN")
+			return "icon_rep_thumbdown_ca";
+
+		return "";
+	}
+}
+
+class DialogueRepName
+{
+	//! A reputation key as something worth showing a player: "yefim_rep" and
+	//! "rep_yefim" both come out as "Yefim". Server owners name these keys
+	//! themselves and never expected them on screen, so the raw key would
+	//! read like a bug.
+	static string Pretty(string key)
+	{
+		string name = key;
+		name.ToLower();
+
+		if (name.IndexOf("rep_") == 0)
+			name = name.Substring(4, name.Length() - 4);
+
+		int tail = name.Length() - 4;
+		if (tail > 0 && name.Substring(tail, 4) == "_rep")
+			name = name.Substring(0, tail);
+
+		name.Replace("_", " ");
+
+		string pretty = "";
+		bool atStart = true;
+
+		for (int i = 0; i < name.Length(); i++)
+		{
+			string letter = name.Get(i);
+			if (letter == " ")
+			{
+				atStart = true;
+				pretty = pretty + letter;
+				continue;
+			}
+
+			if (atStart)
+				letter.ToUpper();
+
+			atStart = false;
+			pretty = pretty + letter;
+		}
+
+		if (pretty == "")
+			return key;
+
+		return pretty;
 	}
 }
 
@@ -193,6 +314,16 @@ class DialogueRepTierList
 		return tiers[index].Label;
 	}
 
+	//! The face for the rank this value falls in, or "" for none.
+	static string IconFileFor(array<ref DialogueRepTier> tiers, int value)
+	{
+		int index = LabelIndexFor(tiers, value);
+		if (index < 0)
+			return "";
+
+		return tiers[index].IconFile();
+	}
+
 	static int LabelIndexFor(array<ref DialogueRepTier> tiers, int value)
 	{
 		if (!tiers)
@@ -221,6 +352,8 @@ class DialogueRepTierList
 class DialogueSpeakerLine
 {
 	string Text;
+	//! The rest of a line too long for Text alone -- see DialogueText.
+	ref array<string> TextMore;
 	int RequiredQuestID = -1;
 	int OverrideQuestID = -1;
 
@@ -229,12 +362,16 @@ class DialogueSpeakerLine
 
 	void DialogueSpeakerLine()
 	{
+		TextMore = new array<string>;
 		VoiceLineIDs = new array<string>;
 		RequiredVars = new array<ref DialogueVarOp>;
 	}
 
 	void Sanitize()
 	{
+		if (!TextMore)
+			TextMore = new array<string>;
+
 		if (RequiredQuestID <= 0)
 			RequiredQuestID = -1;
 
@@ -249,9 +386,15 @@ class DialogueSpeakerLine
 		DialogueVarOpList.SanitizeAll(RequiredVars);
 	}
 
+	string FullText()
+	{
+		return DialogueText.Join(Text, TextMore);
+	}
+
 	void OnSend(ScriptRPC rpc)
 	{
 		rpc.Write(Text);
+		DialogueText.WritePieces(rpc, TextMore);
 		rpc.Write(RequiredQuestID);
 
 		rpc.Write(VoiceLineIDs.Count());
@@ -265,6 +408,7 @@ class DialogueSpeakerLine
 	bool OnRecieve(ParamsReadContext ctx)
 	{
 		if (!ctx.Read(Text)) return false;
+		if (!DialogueText.ReadPieces(ctx, TextMore)) return false;
 		if (!ctx.Read(RequiredQuestID)) return false;
 
 		int voiceCount;
@@ -289,6 +433,8 @@ class DialogueNode
 	int ID;
 	string Type = DialogueNodeType.STANDARD;
 	string SpeakerText;
+	//! The rest of a line too long for SpeakerText alone -- see DialogueText.
+	ref array<string> SpeakerTextMore;
 
 	ref array<string> VoiceLineIDs;
 
@@ -298,13 +444,22 @@ class DialogueNode
 
 	void DialogueNode()
 	{
+		SpeakerTextMore = new array<string>;
 		VoiceLineIDs = new array<string>;
 		SpeakerLines = new array<ref DialogueSpeakerLine>;
 		Responses = new array<ref DialogueResponse>;
 	}
 
+	string FullSpeakerText()
+	{
+		return DialogueText.Join(SpeakerText, SpeakerTextMore);
+	}
+
 	void Sanitize()
 	{
+		if (!SpeakerTextMore)
+			SpeakerTextMore = new array<string>;
+
 		if (!VoiceLineIDs)
 			VoiceLineIDs = new array<string>;
 
@@ -332,6 +487,7 @@ class DialogueNode
 		rpc.Write(ID);
 		rpc.Write(Type);
 		rpc.Write(SpeakerText);
+		DialogueText.WritePieces(rpc, SpeakerTextMore);
 
 		rpc.Write(VoiceLineIDs.Count());
 		foreach (string voiceLine : VoiceLineIDs)
@@ -351,6 +507,7 @@ class DialogueNode
 		if (!ctx.Read(ID)) return false;
 		if (!ctx.Read(Type)) return false;
 		if (!ctx.Read(SpeakerText)) return false;
+		if (!DialogueText.ReadPieces(ctx, SpeakerTextMore)) return false;
 
 		int voiceCount;
 		if (!ctx.Read(voiceCount)) return false;
@@ -606,6 +763,12 @@ class DialogueTree
 
 	string ReputationVar = "";
 
+	//! The most this character's reputation is meant to reach. Only used for
+	//! display -- the standing page reads "10 / 100" instead of a bare number
+	//! so a player can see how far there is left to go. Nothing enforces it;
+	//! 0 means don't show a total at all.
+	int ReputationMax = 0;
+
 	ref array<ref DialogueRepTier> ReputationTiers;
 
 	string LocKey = "";
@@ -680,8 +843,26 @@ class DialogueTree
 		if (AIPatrolSubID < 0)
 			AIPatrolSubID = 0;
 
+		if (ReputationMax < 0)
+			ReputationMax = 0;
+
 		if (!ReputationTiers)
 			ReputationTiers = new array<ref DialogueRepTier>;
+
+		//! A face nobody recognises is dropped rather than left to fail
+		//! silently as a missing texture.
+		foreach (DialogueRepTier repTier : ReputationTiers)
+		{
+			if (!repTier)
+				continue;
+
+			repTier.Icon.ToUpper();
+			if (repTier.Icon != "" && repTier.IconFile() == "")
+			{
+				Print("[DialogueFramework] A reputation rank asks for the icon '" + repTier.Icon + "', which isn't one of HAPPY, NEUTRAL, ANGRY, THUMBUP, THUMBSIDE or THUMBDOWN -- no icon will be shown for it.");
+				repTier.Icon = "";
+			}
+		}
 
 		if (!GreetingVoiceLineIDs)
 			GreetingVoiceLineIDs = new array<string>;
@@ -818,6 +999,7 @@ class DialogueTree
 		rpc.Write(AIPatrolID);
 		rpc.Write(AIPatrolSubID);
 		rpc.Write(ReputationVar);
+		rpc.Write(ReputationMax);
 		DialogueRepTierList.Write(rpc, ReputationTiers);
 		rpc.Write(LocKey);
 	}
@@ -1013,6 +1195,7 @@ class DialogueTree
 		if (!ctx.Read(AIPatrolID)) return false;
 		if (!ctx.Read(AIPatrolSubID)) return false;
 		if (!ctx.Read(ReputationVar)) return false;
+		if (!ctx.Read(ReputationMax)) return false;
 		if (!DialogueRepTierList.Read(ctx, ReputationTiers)) return false;
 		if (!ctx.Read(LocKey)) return false;
 

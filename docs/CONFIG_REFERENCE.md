@@ -37,7 +37,8 @@ field** shown and explained inline.
   "AIPatrolID": 0,                      // <<<<< FRIENDLY-AI dialogue (needs Expansion AI). Matches AI spawned from your AIPatrol\AIPatrols.json patrol with this DialogueID. 0 = not an AI tree
   "AIPatrolSubID": 0,                   // <<<<< With AIPatrolID set: 0 = any unit in that patrol; a number = only that one unit (1, 2, 3...). Lets each unit in a multi-AI patrol have its own dialogue
   "ReputationVar": "",                  // <<<<< Optional. The variable that is THIS character's reputation (e.g. "rep_hana"). Set it so this character's rep is separate from others and shown in the window
-  "ReputationTiers": [],                // <<<<< Optional display bands for the marker, e.g. [ { "Threshold": 3, "Label": "Friendly" } ]. Highest threshold at/below the value wins; empty = show the number
+  "ReputationMax": 0,                   // <<<<< The most this character's standing is meant to reach. The book page then reads "10 / 100" instead of a bare number. 0 shows no total. Nothing enforces it
+  "ReputationTiers": [],                // <<<<< Optional display bands for the marker, e.g. [ { "Threshold": 3, "Label": "Friendly", "Icon": "HAPPY" } ]. Highest threshold at/below the value wins; empty = show the number. "Icon" is HAPPY, NEUTRAL, ANGRY, THUMBUP, THUMBSIDE, THUMBDOWN or left out - it is separate from "Label", so a rank you call "Pissed" can wear the angry face. The icon sits after the wording. A rank can have both, either, or neither: with no Label it shows only the icon, with neither it shows nothing at all
   "RootNodeID": 1,                      // <<<<< Which node ID is shown first when the conversation opens. Must match one of the node IDs below
 
   "GreetingVoiceLineIDs": [             // <<<<< Voice lines played when the conversation OPENS. One picked at random. Empty array = silent greeting
@@ -221,11 +222,21 @@ NPC's generic fallback. Split across as many files as you like.
       "TurnInBackTexts": [             // <<<<< Back-to-conversation button on this quest's turn-in screen
         "One more thing first."
       ],
-      "RewardSelectText": "Take one."    // <<<<< SPOKEN line above the reward picker. A single string, not an array
+      "RewardSelectText": "Take one.",   // <<<<< SPOKEN line above the reward picker. A single string, not an array
+      "RepOnComplete": [                 // <<<<< Reputation applied when this quest is handed in, however it was handed in. Same actions a dialogue button uses: INCREASE, DECREASE, SET
+        { "Name": "yefim_rep", "Op": "INCREASE", "Value": 5 },
+        { "Name": "smitty_rep", "Op": "DECREASE", "Value": 2 }
+      ]
     }
   ]
 }
 ```
+
+`RepOnComplete` is applied on the server the moment the quest is turned in —
+through a conversation or through Expansion's own quest screen, it makes no
+difference. It runs only on a turn-in that actually succeeded, so a failed
+hand-in pays nothing. The player's marker updates immediately, without
+needing to reopen the conversation.
 
 Anything left out falls back to plain built-in wording, so you only need
 entries for the quests you actually want to customise. **Quest wording lives
@@ -294,11 +305,20 @@ no back button. `NoQuestsBackTexts` serves the no-quests screen.
   "WindowBorderThickness": 2,           // <<<<< Border thickness in pixels. 0 removes the border entirely
   "VisitedResponseOpacity": 0.4,        // <<<<< How faded an option looks once the player has picked it this conversation. 1.0 = no fading. Scales the alpha of ResponseTextColor so your palette is kept
 
-  "FontStyle": "DEFAULT",               // <<<<< Built-in font and text size preset: DEFAULT, LIGHT, LARGE or COMPACT. No repacking needed
+  "FontStyle": "DEFAULT",               // <<<<< The older setting that did both jobs. Still read when Font and TextSize are left at their defaults, so an old file keeps working
+  "Font": "DEFAULT",                    // <<<<< Typeface. DayZ's own: DEFAULT (Metron Book), LIGHT, BLACK, METRON, SERIF, ETELKA. The mod's own: INTER, GARAMOND, NOTOSERIF (these three cover Russian), CONDENSED, ZILLA, TYPEWRITER, BLACKOPS (no Russian). No repacking needed
+  "TextSize": "NORMAL",                 // <<<<< NORMAL, LARGE (120%) or COMPACT (85%). Any size works with any font
   "ShowResponseIcons": false,           // <<<<< true adds a small hint icon on the right of each button: exit / cart / speech bubble
   "ShowLanguageButton": true,           // <<<<< Lets players pick which language they read the dialogue in. Only ever appears if you have translations installed -- see section 6
   "ScaleTextWithPanel": false,          // <<<<< OFF by default so updating changes nothing. true makes response text follow PanelWidth, so a bigger menu gets bigger text and a compact one shrinks to fit
   "ShowErrorNotifications": true,       // <<<<< A short on-screen pop-up when an option is misconfigured, so a player isn't left staring at a window that closed for no reason. The full reason goes to your log either way
+  "BookTabName": "",                    // <<<<< What the standing page calls itself on its tab in Expansion's book. Empty = the mod's own wording in each player's language
+  "BookPageTitle": "",                  // <<<<< The heading on that page. Empty = the mod's own wording. Setting either picks one wording for everyone
+  "BookColumnName": "",                 // <<<<< The standing page's first column heading. Empty = "Name" in the player's language
+  "BookColumnStatus": "",               // <<<<< Its second. Empty = "Status"
+  "BookColumnReputation": "",           // <<<<< Its third. Empty = "Reputation"
+  "ShowReputationNotifications": true,  // <<<<< A short pop-up naming who a choice pleased or annoyed, and by how much. Only for changes the player made by picking a button
+  "ScrollSpeed": 1.0,                   // <<<<< How far the mouse wheel moves a long speech. 1.0 is normal, 2.0 twice as far, 0.5 half. Allowed range 0.25 - 4.0. Players can set their own in the window's Settings screen, and theirs wins
   "LayoutOverride": ""                  // <<<<< Empty = use the built-in window. Set a path to YOUR OWN .layout file for anything the presets can't do. See MENU_CONFIG_GUIDE.md
 }
 ```
@@ -334,9 +354,10 @@ Icons are tinted to your `ResponseTextColor`, so they follow your theme
 without extra settings. **Off by default**: turn it on and existing servers
 look exactly as they did.
 
-Use `FontStyle` for the four built-in presets (`DEFAULT`, `LIGHT`, `LARGE`,
-`COMPACT`). DayZ reads fonts only from `.layout` files, so each preset is a
-pre-built layout set shipped in the mod — no repacking on your side.
+Use `Font` for the typeface and `TextSize` for the size; any pairing works.
+DayZ reads a typeface only from a `.layout` file, so every pairing is a
+pre-built layout set shipped in the mod — no repacking on your side. Every
+font offered is one DayZ itself ships, so none of them break a language.
 
 For anything the presets can't express, `LayoutOverride` still points at your
 own layout file. See [`MENU_CONFIG_GUIDE.md`](MENU_CONFIG_GUIDE.md).

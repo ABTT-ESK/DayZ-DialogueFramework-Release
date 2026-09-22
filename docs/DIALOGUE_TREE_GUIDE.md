@@ -273,11 +273,12 @@ by pointing its tree at its own variable with `ReputationVar`:
 
 ```json
 { "ID": 1, "NPCIDs": [], "ReputationVar": "rep_hana",
+  "ReputationMax": 100,
   "ReputationTiers": [
-    { "Threshold": -3, "Label": "Hostile" },
-    { "Threshold": 0,  "Label": "Wary" },
-    { "Threshold": 3,  "Label": "Friendly" },
-    { "Threshold": 6,  "Label": "Trusted" }
+    { "Threshold": -3, "Label": "Hostile",  "Icon": "ANGRY" },
+    { "Threshold": 0,  "Label": "Wary",     "Icon": "NEUTRAL" },
+    { "Threshold": 3,  "Label": "Friendly", "Icon": "HAPPY" },
+    { "Threshold": 6,  "Label": "Trusted",  "Icon": "THUMBUP" }
   ],
   "RootNodeID": 1, "Nodes": [ ... ] }
 ```
@@ -291,10 +292,29 @@ next to the speaker's name — the matching tier `Label` (highest `Threshold` at
 below the current value), or the raw number if you set no tiers. It updates as
 choices change the value during the conversation.
 
-Change it like any variable — a response `SetVars` on `rep_hana`. In
-DialogueForge, set the reputation name and tiers on the *Who it's for* tab, and
-use the **"+ change this character's reputation"** / **"+ require this
+**`Icon`** puts a small picture after the wording: `HAPPY`, `NEUTRAL` or
+`ANGRY` for a face, `THUMBUP`, `THUMBSIDE` or `THUMBDOWN` for a thumb. Leave it
+out for no icon. It is chosen separately from `Label`, so ranks called *Cool*
+and *Pissed* still get the expression you want. A tier can have an icon, a
+label, both, or neither — with no `Label` the icon shows on its own, and with
+neither the marker shows nothing rather than falling back to the raw number.
+The icons are plain white and take the colour you set for the speaker's name.
+
+**`ReputationMax`** is the highest this reputation is meant to reach. It only
+changes how the standing page in Expansion's book reads — *10 / 100* instead of
+a bare *10*. Nothing caps the value; leave it out and the page shows the number
+on its own.
+
+Change it like any variable — a response `SetVars` on `rep_hana`. A quest can
+move it too, with `RepOnComplete` in its `QuestText` entry. In DialogueForge,
+set the reputation name, ranks, icons and *Out of* on the *Who it's for* tab,
+and use the **"+ change this character's reputation"** / **"+ require this
 character's reputation"** buttons on a response to fill it in for you.
+
+Players see a pop-up naming who a choice pleased or annoyed, and can look up
+where they stand with everyone on the **standing page** in Expansion's book.
+Both are set up in `MenuConfig.json` — see
+[MENU_CONFIG_GUIDE.md](MENU_CONFIG_GUIDE.md).
 
 ## Per-quest wording
 

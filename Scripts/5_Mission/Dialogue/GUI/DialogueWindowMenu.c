@@ -1,7 +1,52 @@
 class DialogueWindowMenu : UIScriptedMenu
 {
 	protected TextWidget m_SpeakerName;
+
+	//! The face beside the name, and where the layout puts the name when
+	//! there is no face to make room for.
+	protected ImageWidget m_ReputationIcon;
+	protected float m_NameX;
+	protected float m_NameY;
+	protected float m_NameW;
+	protected float m_NameH;
+	//! What the name row says, and how many more frames to try measuring it.
+	protected string m_RepIconShown;
+	protected int m_RepIconRetries;
 	protected RichTextWidget m_SpeakerLine;
+	//! The line as shown, kept so the box can be measured again next frame.
+	protected string m_SpeakerLineText;
+
+	//! Where the wheel has asked the speech to scroll to, and the last spot we
+	//! put it ourselves. -1 means "not gliding" / "nothing seen yet". Dragging
+	//! the bar wins: a small move is the player's hand, and we follow it.
+	protected float m_SpeakerScrollTarget = -1;
+	protected float m_SpeakerScrollShown = -1;
+
+	//! How far the game itself moves the speech for one wheel notch. It is
+	//! never told to us, so the first jump measures it and a smaller one
+	//! corrects it; that is what lets a fast spin move further than a nudge.
+	protected float m_SpeakerEngineNotchPx;
+
+	//! Set once Escape has closed the window, so the close can't fire twice
+	//! while it waits the frame it takes to happen.
+	protected bool m_QuickExitDone;
+
+	//! Set as soon as the window is hidden, so nothing tries to close or
+	//! measure a window that is already gone.
+	protected bool m_Closed;
+
+	//! The window currently holding the player's inputs, if any. Only that
+	//! one may hand them back, so an older window closing late can't unlock
+	//! the player while a newer one is still up.
+	protected static ref DialogueWindowMenu s_InputLockOwner;
+
+	//! How long that window has been off screen while still holding them.
+	protected static float s_InputLockMissing;
+
+	//! The height we gave the speech text, so wheel scrolling knows how far
+	//! there is to go even if the scroll widget reports nothing.
+	protected float m_SpeakerContentPx;
+
 	protected WrapSpacerWidget m_ResponseList;
 	protected Widget m_CloseButton;
 	protected Widget m_SettingsButton;
@@ -42,6 +87,8 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const string SETTING_POSITION = "POSITION";
 	protected static const string SETTING_TEXTSIZE = "TEXTSIZE";
 	protected static const string SETTING_ICONS = "ICONS";
+	protected static const string SETTING_SCROLLSPEED = "SCROLLSPEED";
+	protected static const string SETTING_REPNOTIFY = "REPNOTIFY";
 	protected static const string SETTING_RESET = "RESET";
 
 	protected bool m_ShowingSettings;
@@ -53,6 +100,7 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const string ICON_EXIT = "icon_exit_ca";
 	protected static const string ICON_CHAT = "icon_chat_ca";
 	protected static const string ICON_CART = "icon_cart_ca";
+	protected static const string ICON_SETTINGS = "icon_settings_ca";
 
 	protected bool m_IconDiagLogged;
 	protected bool m_LabelCastWarned;
@@ -89,6 +137,14 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected float m_ScrollW;
 	protected float m_ScrollH;
 
+	//! Where the layout puts the box holding the spoken line. Kept so the box
+	//! can be grown or shrunk to the words in it and still be put back exactly
+	//! as the layout had it when a quest screen needs the room.
+	protected float m_SpeechX;
+	protected float m_SpeechY;
+	protected float m_SpeechW;
+	protected float m_SpeechH;
+
 	protected static const float TILE_WIDTH = 300;
 	protected static const float TILE_HEIGHT = 72;
 	protected static const float TILE_MARGIN = 4;
@@ -96,6 +152,27 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const float STRIP_MAX_FRACTION = 0.30;
 
 	protected static const float RESPONSE_MIN_FRACTION = 0.28;
+
+	//! The breathing room left between the spoken line and the options under
+	//! it, measured in lines of speech so it looks the same whatever size the
+	//! window is. The fraction is only a fallback for the frame before the
+	//! panel has been measured.
+	//! How big the reputation icon is against the row it sits in, and how
+	//! much air is left between the text and it.
+	protected static const float REP_ICON_SCALE = 0.8;
+	protected static const float REP_ICON_GAP = 0.45;
+	//! Frames to wait for the name to be laid out before settling for the
+	//! estimate. Layout lands within a frame or two; this is the backstop.
+	protected static const int REP_ICON_RETRIES = 30;
+
+	//! Fallback only, for a frame where the name has not been laid out and
+	//! TextWidget.GetTextSize reads zero. Tuned for Metron Book, so a wider
+	//! font would put the icon on the last word -- which is why it is not the
+	//! normal path.
+	protected static const float NAME_CHAR_RATIO = 0.41;
+
+	protected static const float SPEECH_GAP_LINES = 1.5;
+	protected static const float SPEECH_GAP_FRACTION = 0.02;
 
 	protected static const float ITEM_AREA_TOP = 0.28;
 	protected static const float ITEM_AREA_MAX_FRACTION = 0.34;
@@ -105,7 +182,17 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const float TILE_MAX_SCALE = 1.5;
 	protected static const float TILE_MIN_SCALE = 0.8;
 
+	//! The speech and the name at each TextSize. These equal what
+	//! tools/gen_layout_variants.py bakes into the layouts (the master size
+	//! times 1.2 or 0.85, rounded), so at the server's own size setting them
+	//! at runtime changes nothing -- they only matter once a player picks a
+	//! size of their own.
 	protected static const float SPEAKER_FONT_PX = 18;
+	protected static const float SPEAKER_FONT_PX_LARGE = 22;
+	protected static const float SPEAKER_FONT_PX_COMPACT = 15;
+	protected static const float NAME_FONT_PX = 24;
+	protected static const float NAME_FONT_PX_LARGE = 29;
+	protected static const float NAME_FONT_PX_COMPACT = 20;
 
 	protected static const float RESPONSE_FONT_PX = 18;
 	protected static const float RESPONSE_FONT_PX_LARGE = 22;
@@ -135,8 +222,36 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const float PANEL_SCALE_MIN = 0.6;
 	protected static const float PANEL_SCALE_MAX = 1.8;
 
-	protected static const float SPEAKER_CHAR_RATIO = 0.5;
+	//! Measured in game, the same way RESPONSE_CHAR_RATIO was: the font fits
+	//! about 0.70 of its size per character, not the 0.5 first assumed. At 0.5
+	//! the box was built for 140 characters a line where 96 fit, so the last
+	//! lines of a long speech ended up below its bottom edge, unreachable.
+	//! This is only the floor now -- SizeSpeakerLine measures the real height.
+	protected static const float SPEAKER_CHAR_RATIO = 0.70;
 	protected static const float SPEAKER_LINE_SPACING = 1.35;
+
+	//! How far one wheel notch asks the speech to move, in pixels, and how
+	//! quickly the view catches up to that (higher is snappier). 16px is
+	//! about two thirds of a line, so the text slides rather than stepping
+	//! from line to line, and notches add up so a spin still travels. Both
+	//! are multiplied by the player's scroll speed setting, or the server's
+	//! when the player has not set one.
+	protected static const float SPEAKER_SCROLL_STEP_PX = 16;
+	protected static const float SPEAKER_SCROLL_CATCHUP = 4.0;
+
+	//! However fast the wheel is set to go, the glide itself stays within
+	//! these, or it stops looking like a glide at all.
+	protected static const float SPEAKER_CATCHUP_MIN = 2.0;
+	protected static const float SPEAKER_CATCHUP_MAX = 12.0;
+
+	//! A move larger than this in a single frame was the game's own wheel
+	//! handling, not the player dragging the bar -- no hand drags a bar that
+	//! far in one sixtieth of a second.
+	protected static const float SPEAKER_SCROLL_JUMP_PX = 14.0;
+
+	//! Under this, a move is the scroll rounding off what we told it rather
+	//! than anybody scrolling, so it is left alone.
+	protected static const float SPEAKER_SCROLL_SETTLE_PX = 3.0;
 
 	protected static const int TILE_NAME_MAX = 46;
 
@@ -232,11 +347,77 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		if (m_ResponseScroll)
 			m_ResponseScroll.Update();
+
+		//! Now that the buttons have a real height, the spoken line can take
+		//! whatever is left over instead of guessing at it.
+		SizeSpeakerLine();
 	}
 
 	//! A short toast so the player isn't left staring at a window that closed
 	//! for no visible reason. The full reason always goes to the log as well --
 	//! this is the player-facing half, deliberately non-technical.
+	//! The player's own answer if they gave one, the server's otherwise.
+	protected bool ReputationNotificationsWanted()
+	{
+		int chosen = DialogueClientSettings.Get().RepNotify;
+
+		if (chosen == DialogueClientSettings.NOTIFY_ON)
+			return true;
+		if (chosen == DialogueClientSettings.NOTIFY_OFF)
+			return false;
+
+		if (m_MenuConfig)
+			return m_MenuConfig.ShowReputationNotifications;
+
+		return true;
+	}
+
+	//! Who a choice just pleased or annoyed, and by how much. Shown only for
+	//! what the player picked -- a reputation the server changes elsewhere,
+	//! a quest hand-in for instance, is not something they chose here.
+	protected void NotifyReputation(array<ref DialogueVarOp> ops)
+	{
+		if (!ops || ops.Count() == 0)
+			return;
+		if (!ReputationNotificationsWanted())
+			return;
+
+		string body = "";
+
+		foreach (DialogueVarOp op : ops)
+		{
+			if (!op || op.Name == "")
+				continue;
+
+			string who = DialogueRepName.Pretty(op.Name);
+			string amount = op.Value.ToString();
+			string line = "";
+
+			if (op.Op == "INCREASE")
+				line = who + "   +" + amount;
+			else if (op.Op == "DECREASE")
+				line = who + "   -" + amount;
+			else
+				line = who + "   = " + amount;
+
+			if (body != "")
+				body = body + "\n";
+
+			body = body + line;
+		}
+
+		if (body == "")
+			return;
+
+		//! One at a time: two freshly-returned strings in one expression
+		//! alias each other -- see NotifyPlayer.
+		string title = UIText("#STR_DIALOGUEFW_REP_TITLE", "Reputation");
+		StringLocaliser titleText = new StringLocaliser(title);
+		StringLocaliser bodyText = new StringLocaliser(body);
+
+		ExpansionNotification(titleText, bodyText, ExpansionIcons.GetPath("Exclamationmark"), COLOR_EXPANSION_NOTIFICATION_INFO, 5, ExpansionNotificationType.TOAST).Create();
+	}
+
 	protected void NotifyPlayer(string bodyKey, string bodyFallback, bool isError)
 	{
 		if (isError && m_MenuConfig && !m_MenuConfig.ShowErrorNotifications)
@@ -303,7 +484,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 		else
 		{
-			Print("[DialogueFramework] [UI] Font style: " + m_MenuConfig.FontStyle + " -> " + layoutPath);
+			//! Both halves and the file they resolved to: a font that looks
+			//! unchanged is almost always a layout that was never built.
+			string fontNote = m_MenuConfig.Font + " / " + m_MenuConfig.TextSize;
+			Print("[DialogueFramework] [UI] Font: " + fontNote + " -> " + layoutPath);
 		}
 
 		layoutRoot = GetGame().GetWorkspace().CreateWidgets(layoutPath);
@@ -316,6 +500,14 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 
 		m_SpeakerName = TextWidget.Cast(layoutRoot.FindAnyWidget("SpeakerName"));
+		m_ReputationIcon = ImageWidget.Cast(
+			layoutRoot.FindAnyWidget("ReputationIcon"));
+
+		if (m_SpeakerName)
+		{
+			m_SpeakerName.GetPos(m_NameX, m_NameY);
+			m_SpeakerName.GetSize(m_NameW, m_NameH);
+		}
 		m_SpeakerLine = RichTextWidget.Cast(layoutRoot.FindAnyWidget("SpeakerLine"));
 		m_SpeakerLineScroll = ScrollWidget.Cast(layoutRoot.FindAnyWidget("SpeakerLineScroll"));
 		m_ResponseList = WrapSpacerWidget.Cast(layoutRoot.FindAnyWidget("ResponseList"));
@@ -338,6 +530,12 @@ class DialogueWindowMenu : UIScriptedMenu
 		{
 			m_ResponseScroll.GetPos(m_ScrollX, m_ScrollY);
 			m_ResponseScroll.GetSize(m_ScrollW, m_ScrollH);
+		}
+
+		if (m_SpeakerLineScroll)
+		{
+			m_SpeakerLineScroll.GetPos(m_SpeechX, m_SpeechY);
+			m_SpeakerLineScroll.GetSize(m_SpeechW, m_SpeechH);
 		}
 
 		m_ConfirmYesButton = layoutRoot.FindAnyWidget("ConfirmYesButton");
@@ -579,7 +777,124 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (rep != "")
 			display = display + "   -   " + rep;
 
+		//! Before SetText, so the icon measures the name at its real size.
+		m_SpeakerName.SetTextExactSize(WholePx(NameFontSize()));
 		m_SpeakerName.SetText(display);
+
+		//! Armed here, on a real change of text, and never from the retry
+		//! itself -- or a name that could never be measured would re-arm
+		//! forever.
+		m_RepIconShown = display;
+		m_RepIconRetries = REP_ICON_RETRIES;
+		ApplyReputationIcon(display);
+	}
+
+	//! The icon for the rank the player is on, sat after whatever the name
+	//! row says. A rank can carry an icon, a word, both or neither: the word
+	//! is the owner's own name for the rank, so "Cool" with a thumbs-up and
+	//! "Pissed" with a thumbs-down is two ranks filled in that way.
+	//!
+	//! Placed from the text's real rendered width, so the gap is the same in
+	//! any font. An estimate from character count broke the moment the font
+	//! changed: a wider face put the icon on top of the last letter.
+	protected void ApplyReputationIcon(string shown)
+	{
+		if (!m_ReputationIcon || !m_SpeakerName)
+			return;
+
+		string file = GetReputationIconFile();
+		if (file == "" || !m_DialoguePanel)
+		{
+			//! No icon wanted, so nothing to wait for.
+			m_RepIconRetries = 0;
+			HideReputationIcon();
+			return;
+		}
+
+		m_ReputationIcon.LoadImageFile(0, ICON_FOLDER + file + ICON_EXT);
+		m_ReputationIcon.SetImage(0);
+		if (m_MenuConfig)
+			m_ReputationIcon.SetColor(
+				m_MenuConfig.GetColor(m_MenuConfig.SpeakerNameColor));
+
+		//! Square, and as tall as the row it sits in.
+		float nameW;
+		float nameH;
+		m_SpeakerName.GetScreenSize(nameW, nameH);
+
+		float side = nameH * REP_ICON_SCALE;
+		if (side < 8)
+			side = 8;
+
+		float panelW;
+		float panelH;
+		m_DialoguePanel.GetScreenSize(panelW, panelH);
+		if (panelW <= 0 || nameH <= 0)
+		{
+			HideReputationIcon();
+			return;
+		}
+
+		//! The real width of what the row is showing, in pixels. Zero means
+		//! the name has not been laid out yet, so fall back to an estimate --
+		//! LengthUtf8, not Length, or a Cyrillic name counts double.
+		int measuredW;
+		int measuredH;
+		m_SpeakerName.GetTextSize(measuredW, measuredH);
+
+		float textPx = measuredW;
+		if (measuredW <= 0)
+			textPx = shown.LengthUtf8() * nameH * NAME_CHAR_RATIO;
+		else
+			m_RepIconRetries = 0;
+
+		float gapPx = side * REP_ICON_GAP;
+
+		float leftPx = m_NameX * panelW + textPx + gapPx;
+		//! Never off the end of the row, however long the name is.
+		float limitPx = (m_NameX + m_NameW) * panelW - side;
+		if (leftPx > limitPx)
+			leftPx = limitPx;
+
+		//! Centred on the row rather than hung from the top of it: the text
+		//! sits in the middle of the row, so a top-aligned icon reads as
+		//! floating above the word it belongs to.
+		float sideShare = side / panelH;
+		float topY = m_NameY + (m_NameH - sideShare) / 2.0;
+
+		m_ReputationIcon.SetSize(side, side);
+		m_ReputationIcon.SetPos(leftPx / panelW, topY);
+		m_ReputationIcon.Show(true);
+
+		//! The name keeps the whole row: the icon sits after the text rather
+		//! than taking room from it.
+		m_SpeakerName.SetPos(m_NameX, m_NameY);
+		m_SpeakerName.SetSize(m_NameW, m_NameH);
+	}
+
+	//! No face, and the name back where the layout puts it.
+	protected void HideReputationIcon()
+	{
+		if (m_ReputationIcon)
+			m_ReputationIcon.Show(false);
+
+		if (m_SpeakerName)
+		{
+			m_SpeakerName.SetPos(m_NameX, m_NameY);
+			m_SpeakerName.SetSize(m_NameW, m_NameH);
+		}
+	}
+
+	protected string GetReputationIconFile()
+	{
+		if (!m_ActiveTree || m_ActiveTree.ReputationVar == "")
+			return "";
+
+		int value = DialogueVars.GetInstance().GetClientState().Get(
+			m_ActiveTree.ReputationVar);
+
+		return DialogueRepTierList.IconFileFor(m_ActiveTree.ReputationTiers,
+			value);
 	}
 
 	protected string GetReputationDisplay()
@@ -595,6 +910,11 @@ class DialogueWindowMenu : UIScriptedMenu
 			string label = m_ActiveTree.ReputationTiers[tierIndex].Label;
 			if (label != "")
 				return DialogueLoc.ForTree(m_ActiveTree, DialogueLocKeys.TreeList("ReputationTiers", tierIndex), label);
+
+			//! The rank was found and deliberately left wordless. Whatever
+			//! it wanted shown -- an icon, or nothing at all -- the raw
+			//! number is not it.
+			return "";
 		}
 
 		return string.Format(UIText("#STR_DIALOGUEFW_REPUTATION", "Reputation: %1"), value.ToString());
@@ -708,7 +1028,9 @@ class DialogueWindowMenu : UIScriptedMenu
 		array<string> visibleTexts = new array<string>;
 		array<ref DialogueResponse> visible = GetVisibleResponses(node, authored, visibleTexts);
 
-		string spokenText = node.SpeakerText;
+		//! A line past the game's 1023-byte limit arrives in pieces; joined
+		//! only here, for display (see DialogueText).
+		string spokenText = node.FullSpeakerText();
 		if (authored)
 			spokenText = DialogueLoc.ForTree(m_ActiveTree, DialogueLocKeys.NodeSpeaker(m_StageIndex, node.ID), spokenText);
 
@@ -718,7 +1040,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		DialogueSpeakerLine chosenLine = PickSpeakerLine(node, chosenLineIndex);
 		if (chosenLine)
 		{
-			spokenText = chosenLine.Text;
+			spokenText = chosenLine.FullText();
 			if (authored)
 				spokenText = DialogueLoc.ForTree(m_ActiveTree, DialogueLocKeys.NodeSpeakerLine(m_StageIndex, node.ID, chosenLineIndex), spokenText);
 
@@ -955,6 +1277,11 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		DialogueVarOpList.Apply(ops, DialogueVars.GetInstance().GetClientState());
 
+		//! Before the RPC, and only for what the player actually chose: the
+		//! use-counter added above is bookkeeping, not reputation.
+		if (hasSet)
+			NotifyReputation(response.SetVars);
+
 		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
 		if (!player)
 			return;
@@ -1105,52 +1432,203 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!m_SpeakerLine)
 			return;
 
-		m_SpeakerLine.SetText(DialogueFW_FormatText(text));
+		string shown = DialogueFW_FormatText(text);
+		//! Sized before the text goes in, so the measurement below is of the
+		//! line at the size the player will actually read it.
+		m_SpeakerLine.SetTextExactSize(WholePx(SpeakerFontSize()));
+		m_SpeakerLine.SetText(shown);
+		m_SpeakerLine.Update();
+
+		//! Past the 1023-byte limit the line was joined from pieces. Say how
+		//! much of it reached the text box, so a cut further down the chain
+		//! shows up in the log rather than only on screen.
+		if (text.Length() > DialogueText.PIECE_BYTES_LIMIT)
+		{
+			int joinedBytes = text.Length();
+			int shownBytes = shown.Length();
+			Print("[DialogueFramework] [UI] Long line: " + joinedBytes + " bytes joined from pieces, " + shownBytes + " bytes sent to the text box.");
+		}
 
 		if (!m_SpeakerLineScroll)
+			return;
+
+		m_SpeakerLineText = text;
+		m_SpeakerScrollTarget = -1;
+		m_SpeakerScrollShown = -1;
+		SizeSpeakerLine();
+
+		//! Measured again a frame later: the first measurement can come back
+		//! before the widget has laid the text out, the same reason the
+		//! response buttons are sized twice.
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(ReapplySpeakerLineSize);
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(ReapplySpeakerLineSize, 1, false);
+
+		m_SpeakerLineScroll.VScrollToPos01(0);
+	}
+
+	protected void ReapplySpeakerLineSize()
+	{
+		SizeSpeakerLine();
+	}
+
+	//! The box holding the line has to be as tall as the text, or the last
+	//! lines sit below its bottom edge where no amount of scrolling reaches
+	//! them -- which is exactly what a line past the old 1023-byte limit runs
+	//! into first. The widget measures itself; the character-per-line estimate
+	//! is only a floor, for the frame before the text is laid out.
+	protected void SizeSpeakerLine()
+	{
+		if (!m_SpeakerLine || !m_SpeakerLineScroll)
 			return;
 
 		float scrollW;
 		float scrollH;
 		m_SpeakerLineScroll.GetScreenSize(scrollW, scrollH);
 
-		if (scrollW > 0 && scrollH > 0)
-		{
-			float charWidth = SPEAKER_FONT_PX * SPEAKER_CHAR_RATIO;
-			float perLine = scrollW / charWidth;
-			if (perLine < 8)
-				perLine = 8;
-
-			//! LengthUtf8, not Length: Length counts BYTES, and perLine is a
-			//! count of characters. A Cyrillic line measures twice its real
-			//! width that way, Chinese three times, so every non-Latin
-			//! language reserved far more height than it needed.
-			int lines = 1;
-			float consumed = perLine;
-			while (consumed < text.LengthUtf8())
-			{
-				consumed = consumed + perLine;
-				lines = lines + 1;
-			}
-
-			lines = lines + 1;
-
-			float neededPx = lines * SPEAKER_FONT_PX * SPEAKER_LINE_SPACING;
-			if (neededPx < scrollH)
-				neededPx = scrollH;
-
-			m_SpeakerLine.SetSize(0.965, neededPx);
-
-			int lineChars = text.LengthUtf8();
-			int lineBytes = text.Length();
-			Print("[DialogueFramework] [UI] Speaker line: " + lineChars + " chars / " + lineBytes + " bytes, ~" + perLine + " per line, " + lines + " line(s), " + neededPx + "px in a " + scrollH + "px view");
-		}
-		else
+		if (scrollW <= 0 || scrollH <= 0)
 		{
 			Print("[DialogueFramework] [UI] Speaker line: scroll not measured yet, leaving the layout default.");
+			return;
 		}
 
-		m_SpeakerLineScroll.VScrollToPos01(0);
+		float speechPx = SpeakerFontSize();
+		float charWidth = speechPx * SPEAKER_CHAR_RATIO;
+		float perLine = scrollW / charWidth;
+		if (perLine < 8)
+			perLine = 8;
+
+		//! LengthUtf8, not Length: Length counts BYTES, and perLine is a
+		//! count of characters. A Cyrillic line measures twice its real
+		//! width that way, Chinese three times, so every non-Latin
+		//! language reserved far more height than it needed.
+		int lines = 1;
+		float consumed = perLine;
+		while (consumed < m_SpeakerLineText.LengthUtf8())
+		{
+			consumed = consumed + perLine;
+			lines = lines + 1;
+		}
+
+		lines = lines + 1;
+
+		//! The widget's own measurement, when it has one. Half a line of room
+		//! under it so the last line isn't clipped -- any more than that and
+		//! the speech ends in a stretch of empty space. The character estimate
+		//! is only for the frame before the text has been laid out.
+		float measuredPx = m_SpeakerLine.GetContentHeight();
+		float neededPx = lines * speechPx * SPEAKER_LINE_SPACING;
+		if (measuredPx > 0)
+			neededPx = measuredPx + speechPx * 0.5;
+
+		//! Fit the box to the words before the text is sized to the box: a
+		//! short line pulls the options up under it instead of leaving a hole
+		//! in the middle of the window, and a long one is given the room
+		//! rather than being read four lines at a time.
+		float viewPx = FitSpeechBox(neededPx);
+		if (viewPx > 0)
+			scrollH = viewPx;
+
+		if (neededPx < scrollH)
+			neededPx = scrollH;
+
+		m_SpeakerLine.SetSize(0.965, neededPx);
+		m_SpeakerContentPx = neededPx;
+		m_SpeakerLineScroll.Update();
+
+		//! Resizing the box shifts the view on its own. Forget where we left
+		//! it, or that shift reads as a wheel notch and the speech creeps.
+		m_SpeakerScrollShown = -1;
+		m_SpeakerScrollTarget = -1;
+
+		int lineChars = m_SpeakerLineText.LengthUtf8();
+		int lineBytes = m_SpeakerLineText.Length();
+		Print("[DialogueFramework] [UI] Speaker line: " + lineChars + " chars / " + lineBytes + " bytes, ~" + perLine + " per line, estimated " + lines + " line(s), measured " + measuredPx + "px, using " + neededPx + "px in a " + scrollH + "px view");
+	}
+
+	//! True while a quest screen is showing its item strips. They sit in the
+	//! space between the spoken line and the options, so the line keeps the
+	//! layout's own height there and nothing is moved.
+	protected bool StripsShowing()
+	{
+		if (m_RequiredStrip && m_RequiredStrip.IsVisible())
+			return true;
+		if (m_RewardStrip && m_RewardStrip.IsVisible())
+			return true;
+
+		return false;
+	}
+
+	//! Put the box holding the spoken line back exactly as the layout has it.
+	//! The quest item strips sit at a fixed spot below it, so a box grown to
+	//! fit a long line would run straight through them.
+	protected void RestoreSpeechBox()
+	{
+		if (!m_SpeakerLineScroll || m_SpeechH <= 0)
+			return;
+
+		m_SpeakerLineScroll.SetSize(m_SpeechW, m_SpeechH);
+		m_SpeakerLineScroll.Update();
+	}
+
+	//! Make the box holding the spoken line as tall as the line needs, within
+	//! what the window can spare, and put the options directly under it.
+	//! Returns the height the box ended up with, in pixels, or 0 when it was
+	//! left exactly as the layout had it.
+	protected float FitSpeechBox(float neededPx)
+	{
+		if (!m_SpeakerLineScroll || !m_DialoguePanel || m_SpeechH <= 0)
+			return 0;
+
+		float panelW;
+		float panelH;
+		m_DialoguePanel.GetScreenSize(panelW, panelH);
+		if (panelH <= 0)
+			return 0;
+
+		if (StripsShowing())
+		{
+			RestoreSpeechBox();
+			return m_SpeechH * panelH;
+		}
+
+		//! What the options themselves need, so a long speech takes the empty
+		//! middle of the window rather than the room the buttons were using.
+		//! Past the height the layout gives them the list scrolls, as before.
+		float optionsWant = RESPONSE_MIN_FRACTION;
+		if (m_ContentHeightPx > 0)
+		{
+			float optionsMeasured = m_ContentHeightPx / panelH;
+			if (optionsMeasured > optionsWant)
+				optionsWant = optionsMeasured;
+		}
+		if (optionsWant > m_ScrollH)
+			optionsWant = m_ScrollH;
+
+		//! Everything from the bottom of the options back up to the line,
+		//! less the room the options are keeping.
+		float optionsBottom = m_ScrollY + m_ScrollH;
+		float room = optionsBottom - m_SpeechY - SpeechGap() - optionsWant;
+		if (room <= 0)
+			return 0;
+
+		//! Never less than a line and a bit, so a one-word answer still looks
+		//! like a line of speech rather than a sliver.
+		float linePx = SpeakerFontSize();
+		float leastPx = linePx * SPEAKER_LINE_SPACING + linePx * 0.5;
+		float least = leastPx / panelH;
+
+		float want = neededPx / panelH;
+		if (want < least)
+			want = least;
+		if (want > room)
+			want = room;
+
+		m_SpeakerLineScroll.SetSize(m_SpeechW, want);
+		m_SpeakerLineScroll.Update();
+
+		LayoutResponseArea(0);
+
+		return want * panelH;
 	}
 
 	protected string GetQuestListPrompt()
@@ -1400,6 +1878,23 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (label && m_MenuConfig)
 			label.SetColor(m_MenuConfig.GetColor(m_MenuConfig.SpeakerNameColor));
 
+		//! A cog rather than an asterisk. The text stays in the layout as the
+		//! fallback: if the image ever fails to load, the button still has
+		//! something on it instead of being blank.
+		ImageWidget cog = ImageWidget.Cast(
+			m_SettingsButton.FindAnyWidget("SettingsButtonIcon"));
+		if (cog)
+		{
+			cog.LoadImageFile(0, ICON_FOLDER + ICON_SETTINGS + ICON_EXT);
+			cog.SetImage(0);
+			if (m_MenuConfig)
+				cog.SetColor(m_MenuConfig.GetColor(m_MenuConfig.SpeakerNameColor));
+			cog.Show(true);
+
+			if (label)
+				label.Show(false);
+		}
+
 		Widget background = m_SettingsButton.FindAnyWidget("SettingsButtonBackground");
 		if (background && m_MenuConfig)
 			background.SetColor(m_MenuConfig.GetColor(m_MenuConfig.ResponseBackgroundColor));
@@ -1417,7 +1912,17 @@ class DialogueWindowMenu : UIScriptedMenu
 		HideRewardDisplay();
 
 		if (m_SpeakerName)
+		{
+			//! Sized like every other title, so cycling Text size here shows
+			//! the change straight away on this very screen.
+			m_SpeakerName.SetTextExactSize(WholePx(NameFontSize()));
 			m_SpeakerName.SetText(UIText("#STR_DIALOGUEFW_SETTINGS_TITLE", "Settings"));
+			//! Nothing to measure for an icon that is not shown.
+			m_RepIconRetries = 0;
+			//! This screen is the player's, not the NPC's, so the NPC's
+			//! face has no business sitting next to its title.
+			HideReputationIcon();
+		}
 		if (m_SpeakerLine)
 			SetSpeakerLine(UIText("#STR_DIALOGUEFW_SETTINGS_HINT", "These are yours alone. They follow you to any server running this mod."));
 
@@ -1449,6 +1954,14 @@ class DialogueWindowMenu : UIScriptedMenu
 		rowValue = SettingValueIcons();
 		rowLabel = UIText("#STR_DIALOGUEFW_SET_ICONS", "Button icons");
 		AddSettingRow(SETTING_ICONS, rowLabel, rowValue);
+
+		rowValue = SettingValueScrollSpeed();
+		rowLabel = UIText("#STR_DIALOGUEFW_SET_SCROLLSPEED", "Scroll speed");
+		AddSettingRow(SETTING_SCROLLSPEED, rowLabel, rowValue);
+
+		rowValue = SettingValueRepNotify();
+		rowLabel = UIText("#STR_DIALOGUEFW_SET_REPNOTIFY", "Reputation pop-ups");
+		AddSettingRow(SETTING_REPNOTIFY, rowLabel, rowValue);
 
 		if (DialogueClientSettings.Get().HasAnyOverride())
 		{
@@ -1511,6 +2024,27 @@ class DialogueWindowMenu : UIScriptedMenu
 		return "" + percent + "%";
 	}
 
+	protected string SettingValueScrollSpeed()
+	{
+		float speed = DialogueClientSettings.Get().ScrollSpeed;
+		if (speed == DialogueClientSettings.SCROLL_SPEED_SERVER)
+			return ServerDefaultLabel();
+
+		int speedPercent = (int)(speed * 100);
+		return "" + speedPercent + "%";
+	}
+
+	protected string SettingValueRepNotify()
+	{
+		int chosen = DialogueClientSettings.Get().RepNotify;
+		if (chosen == DialogueClientSettings.NOTIFY_ON)
+			return UIText("#STR_DIALOGUEFW_SET_ON", "shown");
+		if (chosen == DialogueClientSettings.NOTIFY_OFF)
+			return UIText("#STR_DIALOGUEFW_SET_OFF", "hidden");
+
+		return ServerDefaultLabel();
+	}
+
 	protected string SettingValueIcons()
 	{
 		int icons = DialogueClientSettings.Get().Icons;
@@ -1567,6 +2101,22 @@ class DialogueWindowMenu : UIScriptedMenu
 
 			settings.Save();
 		}
+		else if (key == SETTING_SCROLLSPEED)
+		{
+			settings.ScrollSpeed = NextScrollSpeed(settings.ScrollSpeed);
+			settings.Save();
+		}
+		else if (key == SETTING_REPNOTIFY)
+		{
+			if (settings.RepNotify == DialogueClientSettings.NOTIFY_SERVER)
+				settings.RepNotify = DialogueClientSettings.NOTIFY_ON;
+			else if (settings.RepNotify == DialogueClientSettings.NOTIFY_ON)
+				settings.RepNotify = DialogueClientSettings.NOTIFY_OFF;
+			else
+				settings.RepNotify = DialogueClientSettings.NOTIFY_SERVER;
+
+			settings.Save();
+		}
 		else if (key == SETTING_RESET)
 		{
 			settings.ResetAll();
@@ -1592,6 +2142,25 @@ class DialogueWindowMenu : UIScriptedMenu
 			return 1.5;
 
 		return DialogueClientSettings.TEXT_SCALE_SERVER;
+	}
+
+	//! Half speed up to triple, then back to whatever the server set.
+	protected float NextScrollSpeed(float current)
+	{
+		if (current == DialogueClientSettings.SCROLL_SPEED_SERVER)
+			return 0.5;
+		if (current < 0.6)
+			return 0.75;
+		if (current < 0.85)
+			return 1.0;
+		if (current < 1.25)
+			return 1.5;
+		if (current < 1.75)
+			return 2.0;
+		if (current < 2.5)
+			return 3.0;
+
+		return DialogueClientSettings.SCROLL_SPEED_SERVER;
 	}
 
 	protected void CycleLanguage()
@@ -2145,6 +2714,10 @@ class DialogueWindowMenu : UIScriptedMenu
 			return;
 		}
 
+		//! The strips are about to take the space under the line, so the line
+		//! goes back to the height the layout gives it before they are placed.
+		RestoreSpeechBox();
+
 		float gap = 0.02;
 		float halfW = (m_ScrollW - gap) / 2.0;
 
@@ -2286,10 +2859,55 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [UI] Item group: " + count + " tile(s), " + bestPerRow + " per row, " + bestRows + " row(s), scale " + bestScale + ", box " + boxWpx + "x" + boxHpx + "px, tile " + tileW + "x" + tileH + "px");
 	}
 
+	//! The room left under the spoken line, as a share of the panel's height.
+	//! A line and a half of speech, so the options never sit tight against
+	//! the last words.
+	protected float SpeechGap()
+	{
+		if (!m_DialoguePanel)
+			return SPEECH_GAP_FRACTION;
+
+		float gapPanelW;
+		float gapPanelH;
+		m_DialoguePanel.GetScreenSize(gapPanelW, gapPanelH);
+		if (gapPanelH <= 0)
+			return SPEECH_GAP_FRACTION;
+
+		float gapPx = SpeakerFontSize() * SPEAKER_LINE_SPACING * SPEECH_GAP_LINES;
+		return gapPx / gapPanelH;
+	}
+
+	//! Where the spoken line ends, as a share of the panel's height, with its
+	//! gap already added. 0 when the box can't be read yet.
+	protected float SpeechBottom()
+	{
+		if (!m_SpeakerLineScroll)
+			return 0;
+
+		float speechX;
+		float speechY;
+		float speechW;
+		float speechH;
+		m_SpeakerLineScroll.GetPos(speechX, speechY);
+		m_SpeakerLineScroll.GetSize(speechW, speechH);
+
+		if (speechH <= 0)
+			return 0;
+
+		return speechY + speechH + SpeechGap();
+	}
+
 	protected void LayoutResponseArea(float topY)
 	{
 		if (!m_ResponseScroll)
 			return;
+
+		//! Nothing between the line and the options: sit them straight under
+		//! it. The layout's own spot leaves the room the quest item strips
+		//! would have used, which on an ordinary screen is an empty band
+		//! across the middle of the window.
+		if (topY <= 0)
+			topY = SpeechBottom();
 
 		if (topY <= 0)
 		{
@@ -2385,14 +3003,23 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (man && man.GetIdentity())
 			playerName = man.GetIdentity().GetName();
 
+		//! A line longer than the game's 1023-byte limit (joined from pieces)
+		//! skips the localiser: it passes the whole line through
+		//! Widget.TranslateString and string.Format, and neither is known to
+		//! take that much. Only the player's name is filled in.
+		if (text.Length() > DialogueText.PIECE_BYTES_LIMIT)
+		{
+			string direct = text;
+			direct.Replace("%1", playerName);
+			return direct;
+		}
+
 		StringLocaliser loc = new StringLocaliser(text, playerName);
 		return loc.Format();
 	}
 
-	//! questID of -1 means "whatever the live quest-detail step is showing",
-	//! which is how the mod's own accept button has always worked. An authored
-	//! response names its own quest instead.
 	//! Whether this player could legitimately take this quest right now.
+	//!
 	//! Passing -1 as the NPC id skips Expansion's "is this NPC the giver"
 	//! test, which is the point -- the option can live on any character --
 	//! while keeping every other rule: already completed, on cooldown,
@@ -2420,6 +3047,9 @@ class DialogueWindowMenu : UIScriptedMenu
 		return ExpansionQuestModule.GetModuleInstance().QuestDisplayConditions(quest, player, questData, -1, false);
 	}
 
+	//! An authored response names its own quest. No id falls back to whatever
+	//! the live quest-detail step is showing, which is how the mod's own
+	//! accept button has always worked.
 	protected void AcceptQuest(int questID)
 	{
 		int target = questID;
@@ -3237,15 +3867,66 @@ class DialogueWindowMenu : UIScriptedMenu
 		return true;
 	}
 
+	//! The player's own text size, or 1 when they have left it to the server.
+	protected float PlayerTextScale()
+	{
+		float scale = DialogueClientSettings.Get().TextScale;
+		if (scale == DialogueClientSettings.TEXT_SCALE_SERVER)
+			return 1.0;
+
+		return scale;
+	}
+
+	//! The size the NPC's line is drawn at -- the server's TextSize, then the
+	//! player's own size on top. The speech box is fitted to this same
+	//! number, so the text and the box can never disagree about how big a
+	//! line is.
+	protected float SpeakerFontSize()
+	{
+		float size = SPEAKER_FONT_PX;
+
+		if (m_MenuConfig)
+		{
+			if (m_MenuConfig.TextSize == DialogueMenuTextSize.LARGE)
+				size = SPEAKER_FONT_PX_LARGE;
+			else if (m_MenuConfig.TextSize == DialogueMenuTextSize.COMPACT)
+				size = SPEAKER_FONT_PX_COMPACT;
+		}
+
+		return size * PlayerTextScale();
+	}
+
+	protected float NameFontSize()
+	{
+		float size = NAME_FONT_PX;
+
+		if (m_MenuConfig)
+		{
+			if (m_MenuConfig.TextSize == DialogueMenuTextSize.LARGE)
+				size = NAME_FONT_PX_LARGE;
+			else if (m_MenuConfig.TextSize == DialogueMenuTextSize.COMPACT)
+				size = NAME_FONT_PX_COMPACT;
+		}
+
+		return size * PlayerTextScale();
+	}
+
+	//! SetTextExactSize takes whole pixels. Rounded rather than cut, so 110%
+	//! of 18 lands on 20 and not 19.
+	protected int WholePx(float px)
+	{
+		return (int)(px + 0.5);
+	}
+
 	protected float ResponseBaseFontSize()
 	{
 		float size = RESPONSE_FONT_PX;
 
 		if (m_MenuConfig)
 		{
-			if (m_MenuConfig.FontStyle == "LARGE")
+			if (m_MenuConfig.TextSize == DialogueMenuTextSize.LARGE)
 				size = RESPONSE_FONT_PX_LARGE;
-			else if (m_MenuConfig.FontStyle == "COMPACT")
+			else if (m_MenuConfig.TextSize == DialogueMenuTextSize.COMPACT)
 				size = RESPONSE_FONT_PX_COMPACT;
 
 			if (m_MenuConfig.ScaleTextWithPanel)
@@ -3583,8 +4264,16 @@ class DialogueWindowMenu : UIScriptedMenu
 		return true;
 	}
 
+	//! Kept for the case where the wheel does reach script. It normally does
+	//! not over a scroll box -- the game deals with it in the engine -- so the
+	//! speech is scrolled from Update instead. Whichever one fires, the notch
+	//! is only counted once: this path stops the engine moving the view, and
+	//! Update only acts on a move it sees.
 	override bool OnMouseWheel(Widget w, int x, int y, int wheel)
 	{
+		if (OverSpeakerLine(w))
+			return ScrollSpeakerLine(wheel);
+
 		if (!OverResponseList(w))
 			return false;
 
@@ -3611,8 +4300,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		return true;
 	}
 
-	//! Only take the wheel over the option list -- the spoken line has its own
-	//! scroll and the engine handles that one fine.
+	//! Only take the wheel over the option list. In practice this rarely runs
+	//! at all: the game handles the wheel over a scroll box in the engine and
+	//! script is never asked, which is why the speech is scrolled from Update
+	//! instead (see UpdateSpeakerScroll).
 	protected bool OverResponseList(Widget w)
 	{
 		if (!w)
@@ -3632,6 +4323,236 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 
 		return false;
+	}
+
+	//! The wheel event can land on the text itself, the scroll, or something
+	//! between the two, so walk up until one of ours turns up.
+	protected bool OverSpeakerLine(Widget w)
+	{
+		if (!w || !m_SpeakerLineScroll)
+			return false;
+
+		Widget walk = w;
+		while (walk)
+		{
+			if (walk == m_SpeakerLineScroll || walk == m_SpeakerLine)
+				return true;
+
+			walk = walk.GetParent();
+		}
+
+		return false;
+	}
+
+	//! One wheel notch asks the speech to move a couple of lines; Update walks
+	//! it there over the next few frames. The engine's own wheel handling
+	//! jumps the view a chunk at a time, which skips whole lines of a long
+	//! speech, so this takes the event over completely.
+	protected bool ScrollSpeakerLine(int wheel)
+	{
+		return NudgeSpeakerLine(-wheel);
+	}
+
+	//! How far the speech can travel: everything below the fold.
+	protected float SpeakerScrollable()
+	{
+		if (!m_SpeakerLineScroll)
+			return 0;
+
+		float viewW;
+		float viewH;
+		m_SpeakerLineScroll.GetScreenSize(viewW, viewH);
+
+		//! The height we gave the text ourselves, not just what the scroll
+		//! reports -- a scroll that answers 0 here would leave the speech
+		//! stuck at the top.
+		float contentPx = m_SpeakerContentPx;
+		float reportedPx = m_SpeakerLineScroll.GetContentHeight();
+		if (reportedPx > contentPx)
+			contentPx = reportedPx;
+
+		float scrollable = contentPx - viewH;
+		if (scrollable < 0)
+			scrollable = 0;
+
+		return scrollable;
+	}
+
+	//! How fast the wheel moves a speech: the player's own setting, or the
+	//! server's when they haven't chosen one. 1.0 is the built-in pace.
+	protected float ScrollSpeed()
+	{
+		float speed = DialogueClientSettings.Get().ScrollSpeed;
+
+		if (speed == DialogueClientSettings.SCROLL_SPEED_SERVER)
+		{
+			speed = 1.0;
+			if (m_MenuConfig)
+				speed = m_MenuConfig.ScrollSpeed;
+		}
+
+		if (speed < DialogueMenuConfig.SCROLL_SPEED_MIN)
+			speed = DialogueMenuConfig.SCROLL_SPEED_MIN;
+		if (speed > DialogueMenuConfig.SCROLL_SPEED_MAX)
+			speed = DialogueMenuConfig.SCROLL_SPEED_MAX;
+
+		return speed;
+	}
+
+	//! Ask the speech to move `notches` wheel notches, positive being further
+	//! down. The view doesn't jump there -- Update walks it over the next few
+	//! frames -- and notches asked for mid-glide add on to where it was going.
+	protected bool NudgeSpeakerLine(float notches)
+	{
+		if (!m_SpeakerLineScroll)
+			return false;
+
+		float scrollable = SpeakerScrollable();
+		if (scrollable <= 0)
+			return false;
+
+		if (m_SpeakerScrollTarget < 0)
+		{
+			m_SpeakerScrollTarget = m_SpeakerScrollShown;
+			if (m_SpeakerScrollTarget < 0)
+				m_SpeakerScrollTarget = m_SpeakerLineScroll.GetVScrollPos();
+		}
+
+		float stepPx = SPEAKER_SCROLL_STEP_PX * ScrollSpeed();
+		m_SpeakerScrollTarget = m_SpeakerScrollTarget + notches * stepPx;
+
+		if (m_SpeakerScrollTarget < 0)
+			m_SpeakerScrollTarget = 0;
+		if (m_SpeakerScrollTarget > scrollable)
+			m_SpeakerScrollTarget = scrollable;
+
+		return true;
+	}
+
+	//! Both the gliding scroll and Escape depend on this running every frame.
+	override void Update(float timeslice)
+	{
+		super.Update(timeslice);
+
+		UpdateSpeakerScroll(timeslice);
+		UpdateQuickExit();
+		UpdateReputationIcon();
+	}
+
+	//! Re-place the icon once the name can be measured. The first line of a
+	//! conversation can be shown before layout, which leaves the icon on the
+	//! character-count estimate -- the very placement that lands on the text.
+	protected void UpdateReputationIcon()
+	{
+		if (m_RepIconRetries <= 0)
+			return;
+
+		m_RepIconRetries = m_RepIconRetries - 1;
+		ApplyReputationIcon(m_RepIconShown);
+	}
+
+	//! Escape closes the conversation from wherever the player is -- the quest
+	//! list, an offer, the hand-in, the settings, a reward pick -- exactly as
+	//! the X does. Every other input is disabled while the window is up, and
+	//! UAUIBack is the one deliberately left alone (see LockPlayerMovement),
+	//! so it is the key that still reaches us.
+	protected void UpdateQuickExit()
+	{
+		if (m_QuickExitDone || !GetUApi())
+			return;
+
+		UAInput back = GetUApi().GetInputByName("UAUIBack");
+		if (!back || !back.LocalPress())
+			return;
+
+		m_QuickExitDone = true;
+		Print("[DialogueFramework] [DIAG] Escape pressed -- closing the conversation.");
+		EndConversation();
+	}
+
+	//! Move a fraction of the way to the target each frame, so the speech
+	//! glides the way it does when the bar is dragged, rather than jumping a
+	//! line at a time.
+	//!
+	//! The wheel never reaches script over a scroll box -- the game handles it
+	//! down in the engine and moves the view a chunk at a time, which is the
+	//! line-skipping we are getting rid of. So the jump itself is the signal:
+	//! when the view moves further in one frame than any hand could drag it,
+	//! it is put straight back and that notch is walked instead.
+	protected void UpdateSpeakerScroll(float timeslice)
+	{
+		if (!m_SpeakerLineScroll)
+			return;
+
+		float current = m_SpeakerLineScroll.GetVScrollPos();
+
+		//! Nothing seen yet: note where the view sits and wait.
+		if (m_SpeakerScrollShown < 0)
+		{
+			m_SpeakerScrollShown = current;
+			m_SpeakerScrollTarget = -1;
+			return;
+		}
+
+		float moved = current - m_SpeakerScrollShown;
+		float jumped = Math.AbsFloat(moved);
+
+		if (jumped > SPEAKER_SCROLL_JUMP_PX)
+		{
+			//! The engine's own wheel handling. Measure its notch as we go --
+			//! the smallest jump seen is one notch -- so a fast spin, which
+			//! arrives as one big jump, still travels further than a nudge.
+			if (m_SpeakerEngineNotchPx <= 0 || jumped < m_SpeakerEngineNotchPx)
+				m_SpeakerEngineNotchPx = jumped;
+
+			float notches = 1.0;
+			if (m_SpeakerEngineNotchPx > 0)
+				notches = Math.Round(jumped / m_SpeakerEngineNotchPx);
+			if (notches < 1.0)
+				notches = 1.0;
+
+			if (moved < 0)
+				notches = -notches;
+
+			m_SpeakerLineScroll.VScrollToPos(m_SpeakerScrollShown);
+			NudgeSpeakerLine(notches);
+			return;
+		}
+
+		//! A middling move is the player dragging the bar, which already looks
+		//! the way it should. Follow it and drop any glide.
+		if (jumped > SPEAKER_SCROLL_SETTLE_PX)
+		{
+			m_SpeakerScrollShown = current;
+			m_SpeakerScrollTarget = -1;
+			return;
+		}
+
+		if (m_SpeakerScrollTarget < 0)
+			return;
+
+		float distance = m_SpeakerScrollTarget - current;
+		if (Math.AbsFloat(distance) < 1.5)
+		{
+			m_SpeakerLineScroll.VScrollToPos(m_SpeakerScrollTarget);
+			m_SpeakerScrollShown = m_SpeakerScrollTarget;
+			m_SpeakerScrollTarget = -1;
+			return;
+		}
+
+		float catchup = SPEAKER_SCROLL_CATCHUP * ScrollSpeed();
+		if (catchup < SPEAKER_CATCHUP_MIN)
+			catchup = SPEAKER_CATCHUP_MIN;
+		if (catchup > SPEAKER_CATCHUP_MAX)
+			catchup = SPEAKER_CATCHUP_MAX;
+
+		float factor = timeslice * catchup;
+		if (factor > 1.0)
+			factor = 1.0;
+
+		float next = current + distance * factor;
+		m_SpeakerLineScroll.VScrollToPos(next);
+		m_SpeakerScrollShown = next;
 	}
 
 	override bool OnMouseEnter(Widget w, int x, int y)
@@ -3661,6 +4582,48 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected bool m_ContentInitialized = false;
 
+	bool DialogueFW_IsClosed()
+	{
+		return m_Closed;
+	}
+
+	//! Last line of defence against the worst thing this window can do: take
+	//! the player's inputs and never give them back. OnHide normally does it,
+	//! but a window can go away without it -- the player dies, another menu
+	//! replaces it, the engine tears it down. The player is then left with no
+	//! controls at all and has to kill the game, which is what was reported on
+	//! 1.5.0. This runs every frame from the mission and puts them right.
+	static void DialogueFW_WatchInputLock(float timeslice)
+	{
+		if (!s_InputLockOwner)
+			return;
+
+		if (s_InputLockOwner.DialogueFW_IsOnScreen())
+		{
+			s_InputLockMissing = 0;
+			return;
+		}
+
+		//! Half a second of grace. A window is not on screen for a frame or
+		//! two while it is being put up, and freeing the player there would
+		//! hand them their controls back mid-conversation.
+		s_InputLockMissing = s_InputLockMissing + timeslice;
+		if (s_InputLockMissing < 0.5)
+			return;
+
+		s_InputLockMissing = 0;
+		Print("[DialogueFramework] [UI] [WARN] A conversation window went away without giving the player their controls back -- restoring them now.");
+		s_InputLockOwner.UnlockPlayerMovement();
+	}
+
+	protected bool DialogueFW_IsOnScreen()
+	{
+		if (m_Closed || !layoutRoot)
+			return false;
+
+		return layoutRoot.IsVisible();
+	}
+
 	override void OnShow()
 	{
 		super.OnShow();
@@ -3680,12 +4643,31 @@ class DialogueWindowMenu : UIScriptedMenu
 		{
 			m_ContentInitialized = true;
 			OpenRootNode();
+			CloseIfEmpty();
 		}
+	}
+
+	//! A window with nothing in it -- no line and no options -- is the empty
+	//! box players reported: it says nothing, does nothing, and holds their
+	//! controls until they kill the game. Whatever left it that way (no
+	//! conversation, a first screen that doesn't exist), it should not sit
+	//! there.
+	protected void CloseIfEmpty()
+	{
+		if (m_ResponseButtons && m_ResponseButtons.Count() > 0)
+			return;
+
+		if (m_ActiveNode && m_ActiveNode.FullSpeakerText() != "")
+			return;
+
+		Print("[DialogueFramework] [UI] [WARN] The conversation window opened with nothing to show -- closing it rather than leaving an empty box on screen.");
+		EndConversation();
 	}
 
 	override void OnHide()
 	{
 		Print("[DialogueFramework] [DIAG] DialogueWindowMenu.OnHide() fired.");
+		m_Closed = true;
 		StopDialogueVoice();
 
 		//! OnHide can run AFTER the destructor has already fired -- closing on
@@ -3699,6 +4681,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (guiQueue)
 		{
 			guiQueue.Remove(ReapplyResponseSizes);
+			guiQueue.Remove(ReapplySpeakerLineSize);
 			guiQueue.Remove(ExecuteReturnToRoot);
 			guiQueue.Remove(ShowSettingsScreen);
 		}
@@ -3723,6 +4706,9 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected void LockPlayerMovement()
 	{
+		s_InputLockOwner = this;
+		s_InputLockMissing = 0;
+
 		GetGame().GetUIManager().ShowUICursor(true);
 
 		IngameHud hud = IngameHud.Cast(GetGame().GetMission().GetHud());
@@ -3749,6 +4735,17 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected void UnlockPlayerMovement()
 	{
+		//! Another window has taken the inputs since this one took them, so
+		//! they are not ours to hand back -- otherwise a window closing a
+		//! frame late would free the player while a newer one is still up.
+		if (s_InputLockOwner && s_InputLockOwner != this)
+		{
+			Print("[DialogueFramework] [DIAG] Not restoring controls -- another conversation window holds them.");
+			return;
+		}
+
+		s_InputLockOwner = null;
+
 		GetGame().GetUIManager().ShowUICursor(false);
 
 		IngameHud hud = IngameHud.Cast(GetGame().GetMission().GetHud());

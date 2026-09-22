@@ -17,6 +17,12 @@ class DialogueClientSettings
 	static const int ICONS_ON = 1;
 	static const int ICONS_OFF = 2;
 
+	static const float SCROLL_SPEED_SERVER = 0;
+
+	static const int NOTIFY_SERVER = 0;
+	static const int NOTIFY_ON = 1;
+	static const int NOTIFY_OFF = 2;
+
 	string Language = "";
 
 	string Position = "";
@@ -24,6 +30,14 @@ class DialogueClientSettings
 	float TextScale = TEXT_SCALE_SERVER;
 
 	int Icons = ICONS_SERVER;
+
+	//! How far the wheel moves a long speech, as a multiple of the built-in
+	//! pace. Zero means the server's setting is used.
+	float ScrollSpeed = SCROLL_SPEED_SERVER;
+
+	//! Whether the pop-up naming who a choice pleased or annoyed is shown.
+	//! Zero means the server's setting is used.
+	int RepNotify = NOTIFY_SERVER;
 
 	protected static ref DialogueClientSettings s_Instance;
 
@@ -57,6 +71,17 @@ class DialogueClientSettings
 
 		if (Icons != ICONS_ON && Icons != ICONS_OFF)
 			Icons = ICONS_SERVER;
+
+		if (RepNotify != NOTIFY_ON && RepNotify != NOTIFY_OFF)
+			RepNotify = NOTIFY_SERVER;
+
+		if (ScrollSpeed != SCROLL_SPEED_SERVER)
+		{
+			if (ScrollSpeed < DialogueMenuConfig.SCROLL_SPEED_MIN)
+				ScrollSpeed = DialogueMenuConfig.SCROLL_SPEED_MIN;
+			if (ScrollSpeed > DialogueMenuConfig.SCROLL_SPEED_MAX)
+				ScrollSpeed = DialogueMenuConfig.SCROLL_SPEED_MAX;
+		}
 	}
 
 	void Load()
@@ -65,7 +90,7 @@ class DialogueClientSettings
 		{
 			JsonFileLoader<DialogueClientSettings>.JsonLoadFile(SETTINGS_FILE, this);
 			Sanitize();
-			Print("[DialogueFramework] [SETTINGS] Loaded player settings: language='" + Language + "' position='" + Position + "' textScale=" + TextScale + " icons=" + Icons);
+			Print("[DialogueFramework] [SETTINGS] Loaded player settings: language='" + Language + "' position='" + Position + "' textScale=" + TextScale + " icons=" + Icons + " scrollSpeed=" + ScrollSpeed + " repNotify=" + RepNotify);
 			return;
 		}
 
@@ -103,6 +128,8 @@ class DialogueClientSettings
 		Position = "";
 		TextScale = TEXT_SCALE_SERVER;
 		Icons = ICONS_SERVER;
+		ScrollSpeed = SCROLL_SPEED_SERVER;
+		RepNotify = NOTIFY_SERVER;
 		Save();
 	}
 
@@ -115,6 +142,10 @@ class DialogueClientSettings
 		if (TextScale != TEXT_SCALE_SERVER)
 			return true;
 		if (Icons != ICONS_SERVER)
+			return true;
+		if (ScrollSpeed != SCROLL_SPEED_SERVER)
+			return true;
+		if (RepNotify != NOTIFY_SERVER)
 			return true;
 
 		return false;

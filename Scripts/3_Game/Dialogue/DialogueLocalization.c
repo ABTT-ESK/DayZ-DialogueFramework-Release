@@ -140,17 +140,39 @@ class DialogueLocEntry
 {
 	string Key;
 	string Text;
+	//! The rest of a translation too long for Text alone -- see DialogueText.
+	//! Translations need it first: 1023 bytes is only about 500 Russian or
+	//! 340 Chinese characters.
+	ref array<string> TextMore;
+
+	void DialogueLocEntry()
+	{
+		TextMore = new array<string>;
+	}
+
+	void Sanitize()
+	{
+		if (!TextMore)
+			TextMore = new array<string>;
+	}
+
+	string FullText()
+	{
+		return DialogueText.Join(Text, TextMore);
+	}
 
 	void OnSend(ScriptRPC rpc)
 	{
 		rpc.Write(Key);
 		rpc.Write(Text);
+		DialogueText.WritePieces(rpc, TextMore);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
 	{
 		if (!ctx.Read(Key)) return false;
 		if (!ctx.Read(Text)) return false;
+		if (!DialogueText.ReadPieces(ctx, TextMore)) return false;
 		return true;
 	}
 }
@@ -197,6 +219,12 @@ class DialogueLocTree
 		if (!Entries)
 			Entries = new array<ref DialogueLocEntry>;
 
+		foreach (DialogueLocEntry entry : Entries)
+		{
+			if (entry)
+				entry.Sanitize();
+		}
+
 		TreeFile = DialogueLocPath.Normalize(TreeFile);
 	}
 
@@ -231,6 +259,12 @@ class DialogueLocQuest
 	{
 		if (!Entries)
 			Entries = new array<ref DialogueLocEntry>;
+
+		foreach (DialogueLocEntry entry : Entries)
+		{
+			if (entry)
+				entry.Sanitize();
+		}
 	}
 
 	void OnSend(ScriptRPC rpc)
@@ -371,14 +405,16 @@ class DialogueLocBundle
 				if (!treeEntry || treeEntry.Key == "" || treeEntry.Text == "")
 					continue;
 
+				string treeText = treeEntry.FullText();
+
 				if (tree.TreeFile != "")
-					m_Lookup.Set("F|" + tree.TreeFile + "|" + treeEntry.Key, treeEntry.Text);
+					m_Lookup.Set("F|" + tree.TreeFile + "|" + treeEntry.Key, treeText);
 
 				if (tree.TreeID > 0)
 				{
 					string idScoped = "I|" + tree.TreeID + "|" + treeEntry.Key;
 					if (!m_Lookup.Contains(idScoped))
-						m_Lookup.Set(idScoped, treeEntry.Text);
+						m_Lookup.Set(idScoped, treeText);
 				}
 			}
 		}
@@ -393,7 +429,7 @@ class DialogueLocBundle
 				if (!questEntry || questEntry.Key == "" || questEntry.Text == "")
 					continue;
 
-				m_Lookup.Set("Q|" + quest.QuestID + "|" + questEntry.Key, questEntry.Text);
+				m_Lookup.Set("Q|" + quest.QuestID + "|" + questEntry.Key, questEntry.FullText());
 			}
 		}
 	}

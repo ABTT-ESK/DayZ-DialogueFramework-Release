@@ -39,8 +39,8 @@ definition. To tie it to one trader, open `Dialogue.json` in DialogueForge
 and use **Pick from trader map...**. The guide has the details.
 
 **Haven't placed the trader yet?** These files give a trader a conversation;
-they don't put one in the world. `OptionalNewTrader.map.txt` has the trader
-map line that does, with every part explained.
+they don't put one in the world. [`OptionalNewTrader.md`](OptionalNewTrader.md) has the
+trader map line that does, with every part explained.
 
 Needs Dialogue Framework 1.4.0 or later. DialogueForge 1.5.0 or later is
 recommended — its trader picker reads every trader map file you have.

@@ -122,21 +122,16 @@ On a client, the log says which language that player ended up with:
 
 **Run "Check ALL config files" in DialogueForge before going live.** It
 reports every translated line pointing at text you've since edited, plus how
-many lines of each conversation are done. Which brings us to the one thing
-that can quietly go wrong:
+many lines of each conversation are done.
 
 ---
 
-## Keep long lines short enough to survive translation
+## Long lines
 
-**The game reads at most 1023 bytes of any one line.** Anything past that is
-silently thrown away when your file is loaded — you get no error, the sentence
-just stops.
-
-It is a limit in **bytes**, not letters, and that is what makes it bite
-translators. A plain English letter costs one byte, a Russian or Greek letter
-costs two, and a Chinese or Japanese one costs three. So the same 1023 bytes is
-roughly:
+**The game reads at most 1023 bytes of any one line.** It is a limit in
+**bytes**, not letters: a plain English letter costs one byte, a Russian or
+Greek letter two, and a Chinese or Japanese one three. So the same 1023 bytes
+is roughly:
 
 | Language | Characters that fit |
 |---|---|
@@ -144,22 +139,23 @@ roughly:
 | Russian, Ukrainian, Greek | about **500** |
 | Chinese, Japanese, Korean | about **340** |
 
-A line you wrote comfortably in English can therefore be **cut off once it is
-translated**, without you changing a word of it. Keep any single line under
-about **500 characters** if you intend to translate it at all.
+**Since 1.6.0 that no longer limits what an NPC says.** A spoken line or a
+translation longer than that is saved in pieces the mod joins back together,
+so a translation can run as long as it needs to. DialogueForge does the
+splitting when it saves and you never see the pieces. Writing a file by hand,
+keep each piece under 1023 bytes: `SpeakerText` and each entry of
+`SpeakerTextMore`, `Text` and each entry of `TextMore`.
 
-You do not have to count them yourself:
+**Response options and quest wording are still read whole.** Anything past
+1023 bytes of one is thrown away without an error. They are buttons and short
+replies, so this rarely matters, and DialogueForge's checks warn when one gets
+close. Their translations are split like everything else.
 
-- **DialogueForge** counts the bytes under the box as you type, turning amber
-  as you approach the limit (or when a translation would cross it) and red when
-  the line will definitely be cut. This is the one that can save you, because
-  it sees your file before the game does.
-- **The server** notes in `LoadLog.txt` any line that arrives sitting exactly on
-  the limit, which means it has already been cut. By then the rest of the
-  sentence is gone, so treat that as a report of damage, not a warning.
-
-If a line is too long, split it across two nodes, or give the node several
-alternate lines instead of one long one. It reads better anyway.
+**The server** notes in `LoadLog.txt` any line or piece that arrives sitting
+exactly on the limit, which means it has already been cut. By then the rest is
+gone, so treat it as a report of damage, not a warning. To fix a conversation,
+open it in DialogueForge and save it; for a translation, save it again from
+the Translations tab.
 
 ## The one gotcha: editing after translating
 

@@ -54,6 +54,19 @@ which in turn wins over the mod's built-in text. Nothing is ever blank.
 assembled by the mod from live Expansion data — you change their wording, not
 their structure.
 
+## Two things that aren't screens
+
+**The standing page** lives in Expansion's book, not in this window. It lists
+where the player stands with every character at once. Its tab, heading and
+three column headings are set with `BookTabName`, `BookPageTitle`,
+`BookColumnName`, `BookColumnStatus` and `BookColumnReputation` in
+`MenuConfig.json`.
+
+**The reputation pop-up** appears over whatever is already on screen when a
+choice moves a character's standing. Turn it off server-wide with
+`ShowReputationNotifications`; players can override it on the player settings
+screen.
+
 ## Where these names appear
 
 - **DialogueForge → Quest wording** groups its fields under these names.

@@ -26,6 +26,10 @@ folder.** No scripting, and no repacking for anything except voice audio.
   end**, no quest list needed
 - Reward picker with item previews for quests that let players choose
 - Window position, size, colours and font all configurable per server
+- Thirteen fonts built in and a separate text size, so any typeface works at
+  any size — DayZ's own, plus seven the mod ships (Inter, EB Garamond and Noto
+  Serif cover Russian; Condensed Sans, Zilla Slab, Special Elite and Black Ops
+  One don't). Nothing to build or repack
 - Optional voice lines, with a talking animation on AI NPCs
 - Talk to Expansion AI you spawn through the mod's own patrol file — each
   patrol carries an ID, so dialogue locks onto the exact unit (two guards in
@@ -41,12 +45,20 @@ folder.** No scripting, and no repacking for anything except voice audio.
   that follow the player everywhere, gate individual responses, or swap in a
   whole different conversation; each character can track its own reputation and
   show the player's standing in the window
+- Standing shown as a word, an icon, or both — a pleased, straight or angry
+  face, or a thumb up, sideways or down — beside the character's name, with the
+  rank wording yours to choose
+- Finishing a quest can move reputation too, not just picking a line
+- A pop-up tells the player who a choice pleased or annoyed, so standing never
+  moves invisibly
+- A standing page in Expansion's book, listing where the player stands with
+  every character at once. Its title and column headings are yours to word
 - Multiple conversation trees per NPC, each unlocked by a completed quest
 - Per-response use limits, so players can't farm reputation by spamming a choice
 - A settings screen each player controls for themselves — the language they read
-  in, where the window sits, text size, and whether button icons show. Saved on
-  their machine and carried to any server running the mod; your colours, size and
-  font stay yours
+  in, where the window sits, text size, how fast a long speech scrolls, and
+  whether button icons and standing pop-ups show. Saved on their machine and
+  carried to any server running the mod; your colours, size and font stay yours
 - Options can be shown *or hidden* by quest progress, and can offer or hand over
   a specific quest straight from a conversation
 - Options can wait for a quest's stage — not started, in progress, ready to hand
@@ -211,13 +223,23 @@ quest system. The NPC talking animation technique is credited to
 which was used as a reference for the underlying engine calls — this mod
 implements it independently and does not require it.
 
+The fonts in `GUI/fonts/` are open-licence typefaces by their own authors,
+converted into DayZ's font format for this mod: Inter (The Inter Project
+Authors), EB Garamond (The EB Garamond Project Authors), Noto Serif (The Noto
+Project Authors), Zilla Slab (The Mozilla Foundation), Black Ops One (The
+Black-Ops Project Authors), Special Elite (Brian J. Bonislawsky, Astigmatic),
+and the condensed sans offered as `CONDENSED`, which is a modified version of
+Saira Condensed (The Saira Project Authors) — renamed because its licence
+reserves the name "Saira" for the original.
+
 ## Repacking
 
 **Repacking into a server mod pack is allowed.**
 
 Please:
 
-- Keep the `LICENSE` file in your repack
+- Keep the `LICENSE` file in your repack, and the licence file beside each
+  font in `GUI/fonts/` — the fonts' own licences require it
 - Credit Dialogue Framework in your server or mod pack description
 - Don't present it as your own work
 
@@ -232,9 +254,14 @@ republished under your own name.
 
 ## Licensing
 
-**This mod is MIT licensed** — see [`LICENSE`](LICENSE). Every line in this
-repository is original work. Fork it, modify it, repack it, ship it on your
-own server; attribution is appreciated but not required.
+**This mod is MIT licensed** — see [`LICENSE`](LICENSE). Every line of code in
+this repository is original work. Fork it, modify it, repack it, ship it on
+your own server; attribution is appreciated but not required.
+
+**The fonts are not MIT.** Each typeface in `GUI/fonts/` keeps its own licence
+— the SIL Open Font License 1.1, or Apache 2.0 for Special Elite — in the file
+beside it. Both allow bundling them in a mod; both require that licence file
+to travel with the font.
 
 **DayZ Expansion is licensed separately and is not included here.** It's
 distributed by the DayZ Expansion Mod Team under
