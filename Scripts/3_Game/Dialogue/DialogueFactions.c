@@ -6,6 +6,24 @@ class DialogueFW_FactionDef
 	string PlayerStance;
 	ref TStringArray FriendlyFactions;
 
+	//! Where this faction's standing with a player is kept.
+	//!
+	//! It is an ordinary variable -- the same kind a conversation button or a
+	//! quest hand-in already changes -- which is what lets one deed move
+	//! several factions at once: a quest that pleases the militia and annoys
+	//! everyone they fight is four ops on the one list, not a special case.
+	//! Empty means this faction keeps no standing and nothing below applies.
+	string ReputationVar = "";
+
+	//! 1 = they turn on a player whose standing with them has fallen far
+	//! enough. Off by default on purpose: most standings start at 0, so a
+	//! faction that merely keeps score would otherwise open fire on sight.
+	int HostileWhenLow = 0;
+
+	//! The point it has to fall to. At or below this the faction stops
+	//! counting the player as one of their own; back above it they calm down.
+	int HostileBelow = 0;
+
 	void DialogueFW_FactionDef()
 	{
 		FriendlyFactions = new TStringArray;
@@ -18,6 +36,16 @@ class DialogueFW_FactionDef
 		PlayerStance.ToUpper();
 		if (PlayerStance != "FRIENDLY" && PlayerStance != "GUARD" && PlayerStance != "HOSTILE")
 			PlayerStance = "FRIENDLY";
+
+		if (HostileWhenLow != 0)
+			HostileWhenLow = 1;
+		if (ReputationVar == "")
+			HostileWhenLow = 0;
+	}
+
+	bool WatchesStanding()
+	{
+		return ReputationVar != "" && HostileWhenLow == 1;
 	}
 }
 
@@ -39,6 +67,7 @@ class DialogueFW_FactionRegistry
 
 	static ref array<ref DialogueFW_FactionDef> s_Defs;
 	static ref map<string, int> s_NameToSlot;
+	static bool s_AnyStanding;
 
 	static string Lower(string value)
 	{
@@ -51,6 +80,7 @@ class DialogueFW_FactionRegistry
 	{
 		s_Defs = new array<ref DialogueFW_FactionDef>;
 		s_NameToSlot = new map<string, int>;
+		s_AnyStanding = false;
 
 		if (!FileExist(CONFIG_FILE))
 		{
@@ -89,6 +119,25 @@ class DialogueFW_FactionRegistry
 		}
 
 		Print("[DialogueFramework] [Factions] Loaded " + count + " custom faction(s).");
+
+		//! Named one by one: a faction that turns hostile on its own is the
+		//! kind of thing a server owner wants to see confirmed at startup
+		//! rather than discover from a player being shot at.
+		foreach (DialogueFW_FactionDef watcher : s_Defs)
+		{
+			if (!watcher || watcher.ReputationVar == "")
+				continue;
+
+			if (watcher.WatchesStanding())
+			{
+				s_AnyStanding = true;
+				Print("[DialogueFramework] [Factions] '" + watcher.Name + "' keeps standing in '" + watcher.ReputationVar + "' and turns hostile at " + watcher.HostileBelow + " or below.");
+			}
+			else
+			{
+				Print("[DialogueFramework] [Factions] '" + watcher.Name + "' keeps standing in '" + watcher.ReputationVar + "' but never turns hostile over it.");
+			}
+		}
 	}
 
 	static DialogueFW_FactionDef GetDef(int slot)
@@ -98,6 +147,15 @@ class DialogueFW_FactionRegistry
 		if (slot < 0 || slot >= s_Defs.Count())
 			return null;
 		return s_Defs[slot];
+	}
+
+	//! Whether any faction at all watches a standing. Worked out once at load
+	//! rather than on the spot: every AI asks it on every frame before doing
+	//! anything heavier, so a server that never set one up pays one bool for
+	//! the whole feature.
+	static bool AnyWatchesStanding()
+	{
+		return s_AnyStanding;
 	}
 
 	static int SlotForName(string name)

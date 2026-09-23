@@ -55,7 +55,20 @@ class DialogueVars
 			return;
 
 		DialoguePlayerState state = GetServerState(uid);
+
+		//! Standing with a faction is one of these variables like any other,
+		//! so a faction watching one finds out about the change here -- the
+		//! one place every change goes through, whoever made it.
+#ifdef EXPANSIONMODAI
+		DialogueFW_FactionStanding.Remember(uid, state);
+#endif
+
 		DialogueVarOpList.Apply(ops, state);
+
+#ifdef EXPANSIONMODAI
+		DialogueFW_FactionStanding.SettleCrossings(uid, state);
+#endif
+
 		SaveServerState(uid);
 	}
 

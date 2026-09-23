@@ -98,6 +98,71 @@ class DialogueVarOp
 	}
 }
 
+//! Something the player has to be carrying for a response to show. Counted
+//! the way Expansion counts a quest's collection objective -- anywhere on the
+//! player, stacks included -- so a gate and a quest agree about what someone
+//! has on them.
+class DialogueItemNeed
+{
+	string ClassName = "";
+	int Amount = 1;
+
+	void Sanitize()
+	{
+		if (Amount < 1)
+			Amount = 1;
+	}
+
+	void OnSend(ScriptRPC rpc)
+	{
+		rpc.Write(ClassName);
+		rpc.Write(Amount);
+	}
+
+	bool OnRecieve(ParamsReadContext ctx)
+	{
+		if (!ctx.Read(ClassName)) return false;
+		if (!ctx.Read(Amount)) return false;
+		return true;
+	}
+}
+
+class DialogueItemNeedList
+{
+	static void Write(ScriptRPC rpc, array<ref DialogueItemNeed> needs)
+	{
+		rpc.Write(needs.Count());
+		foreach (DialogueItemNeed need : needs)
+			need.OnSend(rpc);
+	}
+
+	static bool Read(ParamsReadContext ctx, array<ref DialogueItemNeed> target)
+	{
+		int count;
+		if (!ctx.Read(count)) return false;
+		target.Clear();
+		for (int i = 0; i < count; i++)
+		{
+			DialogueItemNeed need = new DialogueItemNeed();
+			if (!need.OnRecieve(ctx)) return false;
+			target.Insert(need);
+		}
+		return true;
+	}
+
+	static void SanitizeAll(array<ref DialogueItemNeed> needs)
+	{
+		if (!needs)
+			return;
+
+		foreach (DialogueItemNeed need : needs)
+		{
+			if (need)
+				need.Sanitize();
+		}
+	}
+}
+
 class DialogueVarOpList
 {
 	static void Write(ScriptRPC rpc, array<ref DialogueVarOp> ops)
@@ -586,6 +651,16 @@ class DialogueResponse
 	ref array<ref DialogueVarOp> RequiredVars;
 	ref array<ref DialogueVarOp> SetVars;
 
+	//! Show this only while the player is carrying these. Empty means
+	//! no such condition, which is every response written before 1.7.0.
+	ref array<ref DialogueItemNeed> RequiredItems;
+
+	//! Show this only between these two hours of the in-game day, 0 to 23.
+	//! -1 on either shows it at any hour. A start later than the end wraps
+	//! over midnight, so 22 to 5 is night.
+	int ShowFromHour = -1;
+	int ShowToHour = -1;
+
 	int MaxUses = 0;
 	string UsesKey = "";
 
@@ -593,6 +668,7 @@ class DialogueResponse
 	{
 		RequiredVars = new array<ref DialogueVarOp>;
 		SetVars = new array<ref DialogueVarOp>;
+		RequiredItems = new array<ref DialogueItemNeed>;
 	}
 
 	void Sanitize()
@@ -629,6 +705,25 @@ class DialogueResponse
 		if (!SetVars)
 			SetVars = new array<ref DialogueVarOp>;
 		DialogueVarOpList.SanitizeAll(SetVars);
+
+		if (!RequiredItems)
+			RequiredItems = new array<ref DialogueItemNeed>;
+		DialogueItemNeedList.SanitizeAll(RequiredItems);
+
+		if (ShowFromHour < 0 || ShowFromHour > 23)
+			ShowFromHour = -1;
+		if (ShowToHour < 0 || ShowToHour > 23)
+			ShowToHour = -1;
+
+		//! Both left out reads as 0 and 0, which would otherwise mean "only
+		//! during the midnight hour" -- an option written before 1.7.0, or by
+		//! hand without these, would vanish for 23 hours of the day. Any other
+		//! single-hour window still works; 0 to 0 is spelt "any hour".
+		if (ShowFromHour == 0 && ShowToHour == 0)
+		{
+			ShowFromHour = -1;
+			ShowToHour = -1;
+		}
 	}
 
 	void OnSend(ScriptRPC rpc)
@@ -645,6 +740,9 @@ class DialogueResponse
 		rpc.Write(QuestID);
 		rpc.Write(ShowWhileQuestID);
 		rpc.Write(ShowWhileQuestState);
+		DialogueItemNeedList.Write(rpc, RequiredItems);
+		rpc.Write(ShowFromHour);
+		rpc.Write(ShowToHour);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -661,6 +759,9 @@ class DialogueResponse
 		if (!ctx.Read(QuestID)) return false;
 		if (!ctx.Read(ShowWhileQuestID)) return false;
 		if (!ctx.Read(ShowWhileQuestState)) return false;
+		if (!DialogueItemNeedList.Read(ctx, RequiredItems)) return false;
+		if (!ctx.Read(ShowFromHour)) return false;
+		if (!ctx.Read(ShowToHour)) return false;
 		return true;
 	}
 }
@@ -760,6 +861,18 @@ class DialogueTree
 	int AIPatrolID = 0;
 
 	int AIPatrolSubID = 0;
+
+	//! The name shown at the top of the window, when the conversation wants to
+	//! name the speaker itself. Left empty, the name comes from wherever it
+	//! always has: Expansion's own name for a quest NPC, the trader's name for
+	//! a trader.
+	//!
+	//! It exists for talkable AI, who have no name to take. An AI's only name
+	//! is its faction's, and a faction the server defined itself is spawned
+	//! under an internal slot name the client cannot read back, so the window
+	//! showed nothing at all. One conversation belongs to one unit of a
+	//! patrol, so a name here is a name per character, not per patrol.
+	string SpeakerName = "";
 
 	string ReputationVar = "";
 
@@ -1002,6 +1115,7 @@ class DialogueTree
 		rpc.Write(ReputationMax);
 		DialogueRepTierList.Write(rpc, ReputationTiers);
 		rpc.Write(LocKey);
+		rpc.Write(SpeakerName);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -1198,6 +1312,7 @@ class DialogueTree
 		if (!ctx.Read(ReputationMax)) return false;
 		if (!DialogueRepTierList.Read(ctx, ReputationTiers)) return false;
 		if (!ctx.Read(LocKey)) return false;
+		if (!ctx.Read(SpeakerName)) return false;
 
 		return true;
 	}

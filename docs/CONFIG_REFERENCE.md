@@ -36,6 +36,7 @@ field** shown and explained inline.
   "P2PTraderIDs": [],                   // <<<<< P2P TRADER dialogue (needs Expansion P2P Market). The m_TraderID from expansion\p2pmarket\P2PTrader_<n>.json. Unique per trader, so no class/position needed
   "AIPatrolID": 0,                      // <<<<< FRIENDLY-AI dialogue (needs Expansion AI). Matches AI spawned from your AIPatrol\AIPatrols.json patrol with this DialogueID. 0 = not an AI tree
   "AIPatrolSubID": 0,                   // <<<<< With AIPatrolID set: 0 = any unit in that patrol; a number = only that one unit (1, 2, 3...). Lets each unit in a multi-AI patrol have its own dialogue
+  "SpeakerName": "",                    // <<<<< Optional. The name shown at the top of the window. Leave it empty and the name comes from where it always did: Expansion's name for a quest NPC, the trader's own name for a trader. It matters for talking AI, who have no name of their own to show -- and since one conversation belongs to one unit of a patrol, this is a name per character, not per patrol. It can be translated like any other text
   "ReputationVar": "",                  // <<<<< Optional. The variable that is THIS character's reputation (e.g. "rep_hana"). Set it so this character's rep is separate from others and shown in the window
   "ReputationMax": 0,                   // <<<<< The most this character's standing is meant to reach. The book page then reads "10 / 100" instead of a bare number. 0 shows no total. Nothing enforces it
   "ReputationTiers": [],                // <<<<< Optional display bands for the marker, e.g. [ { "Threshold": 3, "Label": "Friendly", "Icon": "HAPPY" } ]. Highest threshold at/below the value wins; empty = show the number. "Icon" is HAPPY, NEUTRAL, ANGRY, THUMBUP, THUMBSIDE, THUMBDOWN or left out - it is separate from "Label", so a rank you call "Pissed" can wear the angry face. The icon sits after the wording. A rank can have both, either, or neither: with no Label it shows only the icon, with neither it shows nothing at all
@@ -108,6 +109,23 @@ field** shown and explained inline.
           "ActionType": "NONE",
           "MaxUses": 1,                     // <<<<< Anti-farm. How many times ONE player may ever pick this. 0 (or omitted) = unlimited
           "UsesKey": "uses_a1b2c3d4"        // <<<<< The hidden per-player counter for MaxUses. DialogueForge generates it -- don't invent or reuse one by hand
+        },
+        {
+          "Text": "I brought the rags.",
+          "NextNodeID": 1,
+          "RequiredQuestID": -1,
+          "ActionType": "NONE",
+          "RequiredItems": [                // <<<<< 1.7.0 — only shown while the player is CARRYING these. Omitted/empty = no such condition
+            { "ClassName": "Rag", "Amount": 3 }   // <<<<< exact DayZ class name; counted anywhere on them, stacks included
+          ]
+        },
+        {
+          "Text": "You said to come after dark.",
+          "NextNodeID": 1,
+          "RequiredQuestID": -1,
+          "ActionType": "NONE",
+          "ShowFromHour": 22,               // <<<<< 1.7.0 — only shown between these two hours of the in-game day, 0-23
+          "ShowToHour": 5                   // <<<<< start later than end wraps over midnight, so 22 to 5 is night. -1 on EITHER = any hour
         }
       ]
     },
@@ -393,6 +411,17 @@ its own `PersistentAggroThreshold` (`-1` = use global, `0` = never permanent,
 `N` = permanent after N) and `PersistenceMode` (`""` = use global). So different
 patrols can be quick to hold a grudge, slow, or never.
 
+**A patrol nobody can find: check `MinDistRadius`.** Expansion spawns a patrol
+only while a player is in the *ring* between its `MinDistRadius` and
+`MaxDistRadius` — not when they are closer than the minimum. Left at `-1` a
+patrol uses your server's `AIPatrolSettings.json` defaults, which are commonly
+**400 m** and **1000 m**, so a talkable character placed where players already
+stand never appears: they are inside the minimum before the game ever looks.
+Give anyone meant to be walked up to a `MinDistRadius` of `0` and a
+`MaxDistRadius` that covers the area (a few hundred metres is plenty). This is
+Expansion's behaviour, not the mod's, and it costs an evening to work out the
+first time.
+
 ---
 
 # 5. Custom factions — `Factions\Factions.json`
@@ -408,11 +437,51 @@ them to talkable patrols (set a patrol's `Faction` to one of these names). Up to
       "Name": "Bandits",             // <<<<< used as a patrol's "Faction", and by other factions' FriendlyFactions
       "Loadout": "",                 // <<<<< loadout file name; "" = default human loadout
       "PlayerStance": "HOSTILE",     // <<<<< FRIENDLY (walk up & talk) | GUARD (defends when you raise a weapon) | HOSTILE (attacks on sight)
-      "FriendlyFactions": ["Raiders"] // <<<<< names this faction won't fight (custom or built-in)
+      "FriendlyFactions": ["Raiders"], // <<<<< names this faction won't fight (custom or built-in)
+
+      "ReputationVar": "rep_bandits", // <<<<< 1.7.0 — the variable holding a player's standing with this faction; "" = keeps none
+      "HostileWhenLow": 1,           // <<<<< 1.7.0 — 1 = they turn on a player whose standing falls far enough; 0 = they never do
+      "HostileBelow": -20            // <<<<< 1.7.0 — the point. At or below it they treat the player as an enemy; above it they calm down
     }
   ]
 }
 ```
+
+## Faction reputation (1.7.0)
+
+`ReputationVar` is an ordinary variable — the same kind a conversation button
+(`SetVars`) or a quest hand-in (`RepOnComplete`, section 3) already changes.
+Nothing special is needed to move it, which is the point: **one hand-in can
+move as many factions as you like, each its own way.**
+
+```jsonc
+"RepOnComplete": [
+  { "Name": "rep_militia",  "Op": "INCREASE", "Value": 20 },
+  { "Name": "rep_bandits",  "Op": "DECREASE", "Value": 5  },
+  { "Name": "rep_raiders",  "Op": "DECREASE", "Value": 5  },
+  { "Name": "rep_farmers",  "Op": "INCREASE", "Value": 5  }
+]
+```
+
+With `HostileWhenLow` set:
+
+- A player at or below `HostileBelow` stops counting as one of the faction's
+  own. Their AI treat them exactly as they treat anyone outside the faction —
+  a `FRIENDLY` faction turns on them.
+- The moment the standing climbs back above it, they let go. The faction's
+  permanent-aggro counter (section 4) is cleared at the same time, so a grudge
+  earned by fighting them is forgiven too — this is the only thing that clears
+  one.
+- The player gets a message either way, titled with the faction's name.
+  A server that turned reputation notifications off in `MenuConfig.json`
+  doesn't send these either.
+
+**To show a faction's standing to players**, give one of its talkable patrols'
+conversations that same `ReputationVar` (with `ReputationTiers`, and
+`ReputationMax` if you want "40 / 100"). The name, rank and icon then appear at
+the top of the conversation and on the standing page of the book, exactly as
+they do for a character. A standing no conversation names still works — it just
+has nowhere to be shown.
 
 Notes:
 
@@ -424,6 +493,8 @@ Notes:
   an Expansion limitation.
 - `PlayerStance` is the default before any `GO_HOSTILE`; the aggro system in
   section 4 still governs what happens after a dialogue turns them hostile.
+- `HostileWhenLow` is ignored without a `ReputationVar` — there would be
+  nothing to read.
 
 ---
 

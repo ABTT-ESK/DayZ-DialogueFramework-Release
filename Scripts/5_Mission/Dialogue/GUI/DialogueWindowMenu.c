@@ -105,6 +105,10 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected bool m_IconDiagLogged;
 	protected bool m_LabelCastWarned;
 
+	//! Set when a piece of the window came back missing -- see
+	//! DialogueFW_GiveUpOnBuild.
+	protected bool m_BuildBroken;
+
 	protected ref array<ExpansionQuestRewardConfig> m_CurrentRewards;
 	protected bool m_ShowingRewardList;
 
@@ -159,8 +163,19 @@ class DialogueWindowMenu : UIScriptedMenu
 	//! panel has been measured.
 	//! How big the reputation icon is against the row it sits in, and how
 	//! much air is left between the text and it.
+	//! Where the cog and the close button end, in pixels, straight out of the
+	//! layout: `position 12 12`, `size 28 28`. They are the only widgets in
+	//! the window placed in pixels, so on a short window they reach further
+	//! down it than anything else and the spoken line has to start below them.
+	//! Change them in the .layout files and change these with them.
+	protected static const float HEADER_BUTTON_PX = 40;
+	protected static const float HEADER_BUTTON_GAP_PX = 6;
+
 	protected static const float REP_ICON_SCALE = 0.8;
-	protected static const float REP_ICON_GAP = 0.45;
+	//! Doubled on 2026-09-22: the measured width of a name ends at the last
+	//! letter's ink, so at 0.45 the icon sat against the final letter rather
+	//! than after the word.
+	protected static const float REP_ICON_GAP = 0.9;
 	//! Frames to wait for the name to be laid out before settling for the
 	//! estimate. Layout lands within a frame or two; this is the backstop.
 	protected static const int REP_ICON_RETRIES = 30;
@@ -453,7 +468,10 @@ class DialogueWindowMenu : UIScriptedMenu
 			if (!m_StringTableWarned)
 			{
 				m_StringTableWarned = true;
-				Print("[DialogueFramework] [UI] [ERROR] stringtable.csv is missing from the built PBO -- falling back to English, and automatic language detection cannot work. Add *.csv to your packing tool's copy/include list and repack.");
+				//! One missing key reads exactly like a missing table, so the
+				//! key is named: a single one is a gap in stringtable.csv,
+				//! everything at once is the file not being packed at all.
+				Print("[DialogueFramework] [UI] [ERROR] No wording found for " + key + " -- falling back to English. If only this one is reported, it is missing from stringtable.csv. If every piece of text in the window is plain English and languages are being ignored, stringtable.csv did not make it into the built PBO: add *.csv to your packing tool's copy/include list and repack.");
 			}
 
 			return fallback;
@@ -469,20 +487,35 @@ class DialogueWindowMenu : UIScriptedMenu
 	}
 #endif
 
+	//! Build this one from the mod's own plain layout, ignoring the server's
+	//! font variant and any layout override. Set by the launcher on a second
+	//! attempt after a window came up empty: the file is the only thing we can
+	//! change, and the default font beats no conversation.
+	protected bool m_ForcePlainLayout;
+
+	void DialogueFW_UsePlainLayout()
+	{
+		m_ForcePlainLayout = true;
+	}
+
 	override Widget Init()
 	{
 		m_MenuConfig = DialogueManager.GetInstance().GetMenuConfig();
 
-		if (m_MenuConfig)
+		if (m_MenuConfig && !m_ForcePlainLayout)
 			m_LayoutSuffix = m_MenuConfig.GetLayoutSuffix();
 
 		string layoutPath = LayoutPath("dialogue_menu");
-		if (m_MenuConfig && m_MenuConfig.LayoutOverride != "")
+		if (m_ForcePlainLayout)
+		{
+			Print("[DialogueFramework] [UI] Second attempt -- building from " + layoutPath + ".");
+		}
+		else if (m_MenuConfig && m_MenuConfig.LayoutOverride != "")
 		{
 			Print("[DialogueFramework] [UI] Using layout override: " + m_MenuConfig.LayoutOverride);
 			layoutPath = m_MenuConfig.LayoutOverride;
 		}
-		else
+		else if (m_MenuConfig)
 		{
 			//! Both halves and the file they resolved to: a font that looks
 			//! unchanged is almost always a layout that was never built.
@@ -772,7 +805,14 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!m_SpeakerName)
 			return;
 
+		//! A conversation that names its own speaker wins. That is the only
+		//! name a talkable AI has -- see DialogueTree.SpeakerName -- and for a
+		//! quest NPC or a trader it is a deliberate override of the name the
+		//! server gave them.
 		string display = m_NPCName;
+		if (m_ActiveTree && m_ActiveTree.SpeakerName != "")
+			display = DialogueLoc.ForTree(m_ActiveTree, DialogueLocKeys.TreeSingle("SpeakerName"), m_ActiveTree.SpeakerName);
+
 		string rep = GetReputationDisplay();
 		if (rep != "")
 			display = display + "   -   " + rep;
@@ -1109,6 +1149,10 @@ class DialogueWindowMenu : UIScriptedMenu
 			return false;
 		if (!VarGatePasses(response.RequiredVars))
 			return false;
+		if (!ItemGatePasses(response.RequiredItems))
+			return false;
+		if (!TimeGatePasses(response))
+			return false;
 		if (response.MaxUses > 0 && response.UsesKey != "")
 		{
 			int used = DialogueVars.GetInstance().GetClientState().Get(response.UsesKey);
@@ -1116,6 +1160,73 @@ class DialogueWindowMenu : UIScriptedMenu
 				return false;
 		}
 		return true;
+	}
+
+	//! What the player is carrying. Counted the way Expansion counts a
+	//! quest's collection objective -- everything on them, stacks included --
+	//! so a gate and a quest agree about what someone has on them.
+	protected bool ItemGatePasses(array<ref DialogueItemNeed> needs)
+	{
+		if (!needs || needs.Count() == 0)
+			return true;
+
+		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+		if (!player || !player.GetInventory())
+			return false;
+
+		array<EntityAI> carried = new array<EntityAI>;
+		carried.Reserve(player.GetInventory().CountInventory());
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, carried);
+
+		foreach (DialogueItemNeed need : needs)
+		{
+			if (!need || need.ClassName == "")
+				continue;
+
+			string wanted = need.ClassName;
+			wanted.ToLower();
+
+			int found = 0;
+			foreach (EntityAI entity : carried)
+			{
+				ItemBase item;
+				if (!Class.CastTo(item, entity))
+					continue;
+
+				string type = item.GetType();
+				type.ToLower();
+				if (type != wanted)
+					continue;
+
+				found = found + item.Expansion_GetStackAmount();
+			}
+
+			if (found < need.Amount)
+				return false;
+		}
+
+		return true;
+	}
+
+	//! The hour of the in-game day, so a response can belong to the night or
+	//! to working hours. A start later than the end wraps over midnight, so
+	//! 22 to 5 covers 22, 23, 0 and on to 5.
+	protected bool TimeGatePasses(DialogueResponse response)
+	{
+		if (response.ShowFromHour < 0 || response.ShowToHour < 0)
+			return true;
+
+		int year;
+		int month;
+		int day;
+		int hour;
+		int minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+
+		if (response.ShowFromHour <= response.ShowToHour)
+			return hour >= response.ShowFromHour && hour <= response.ShowToHour;
+
+		return hour >= response.ShowFromHour || hour <= response.ShowToHour;
 	}
 
 	//! Show the response only while its quest sits in the chosen state. This
@@ -1516,9 +1627,31 @@ class DialogueWindowMenu : UIScriptedMenu
 		//! the speech ends in a stretch of empty space. The character estimate
 		//! is only for the frame before the text has been laid out.
 		float measuredPx = m_SpeakerLine.GetContentHeight();
-		float neededPx = lines * speechPx * SPEAKER_LINE_SPACING;
+		float estimatePx = lines * speechPx * SPEAKER_LINE_SPACING;
+
+		//! Half a line of room under a short speech, so it doesn't end in a
+		//! band of empty space. A speech that wraps gets a whole line, and
+		//! never less than the estimate.
+		//!
+		//! The widget's measurement cannot be trusted to the last line of a
+		//! wrapped speech: measured against a 700-character Russian line on
+		//! 2026-09-23 it reported 242px where the words needed 267px -- one
+		//! line short, which is exactly the last line sitting under the
+		//! bottom edge with its tops showing, scroll bar already at the end.
+		//! That is what a player reported. Spare room inside a box that long
+		//! is never seen; a box one line short hides the end of the speech
+		//! with no way to reach it.
+		float slackPx = speechPx * 0.5;
+		bool wrapped = lines > 3;
+		if (wrapped)
+			slackPx = speechPx * SPEAKER_LINE_SPACING;
+
+		float neededPx = estimatePx;
 		if (measuredPx > 0)
-			neededPx = measuredPx + speechPx * 0.5;
+			neededPx = measuredPx + slackPx;
+
+		if (wrapped && estimatePx > neededPx)
+			neededPx = estimatePx;
 
 		//! Fit the box to the words before the text is sized to the box: a
 		//! short line pulls the options up under it instead of leaving a hole
@@ -1532,8 +1665,24 @@ class DialogueWindowMenu : UIScriptedMenu
 			neededPx = scrollH;
 
 		m_SpeakerLine.SetSize(0.965, neededPx);
-		m_SpeakerContentPx = neededPx;
 		m_SpeakerLineScroll.Update();
+
+		//! Asked again now that it has the room. A text widget measured while
+		//! it is still too short reports only the part that fitted, and the
+		//! box is then built around that wrong number -- the words below it
+		//! are laid out but sit outside the box, where the scroll bar reaches
+		//! its end without ever showing them. Asking a second time, after it
+		//! has been given room, is what catches that.
+		float settledPx = m_SpeakerLine.GetContentHeight();
+		if (settledPx > 0 && settledPx + speechPx * 0.5 > neededPx)
+		{
+			neededPx = settledPx + speechPx * 0.5;
+			m_SpeakerLine.SetSize(0.965, neededPx);
+			m_SpeakerLineScroll.Update();
+			Print("[DialogueFramework] [UI] Speaker line: grew to " + neededPx + "px once the text had room -- the first measurement was short.");
+		}
+
+		m_SpeakerContentPx = neededPx;
 
 		//! Resizing the box shifts the view on its own. Forget where we left
 		//! it, or that shift reads as a wheel notch and the speech creeps.
@@ -1542,7 +1691,7 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		int lineChars = m_SpeakerLineText.LengthUtf8();
 		int lineBytes = m_SpeakerLineText.Length();
-		Print("[DialogueFramework] [UI] Speaker line: " + lineChars + " chars / " + lineBytes + " bytes, ~" + perLine + " per line, estimated " + lines + " line(s), measured " + measuredPx + "px, using " + neededPx + "px in a " + scrollH + "px view");
+		Print("[DialogueFramework] [UI] Speaker line: " + lineChars + " chars / " + lineBytes + " bytes, ~" + perLine + " per line, estimated " + lines + " line(s) = " + estimatePx + "px, measured " + measuredPx + "px, using " + neededPx + "px in a " + scrollH + "px view");
 	}
 
 	//! True while a quest screen is showing its item strips. They sit in the
@@ -1561,11 +1710,32 @@ class DialogueWindowMenu : UIScriptedMenu
 	//! Put the box holding the spoken line back exactly as the layout has it.
 	//! The quest item strips sit at a fixed spot below it, so a box grown to
 	//! fit a long line would run straight through them.
+	//! Where the spoken line may start: where the layout puts it, unless the
+	//! window is short enough that the cog and close button reach past it.
+	//! See HEADER_BUTTON_PX.
+	protected float SpeechTop(float panelH)
+	{
+		if (panelH <= 0)
+			return m_SpeechY;
+
+		float headerY = (HEADER_BUTTON_PX + HEADER_BUTTON_GAP_PX) / panelH;
+		if (m_SpeechY < headerY)
+			return headerY;
+
+		return m_SpeechY;
+	}
+
 	protected void RestoreSpeechBox()
 	{
 		if (!m_SpeakerLineScroll || m_SpeechH <= 0)
 			return;
 
+		float panelW;
+		float panelH;
+		if (m_DialoguePanel)
+			m_DialoguePanel.GetScreenSize(panelW, panelH);
+
+		m_SpeakerLineScroll.SetPos(m_SpeechX, SpeechTop(panelH));
 		m_SpeakerLineScroll.SetSize(m_SpeechW, m_SpeechH);
 		m_SpeakerLineScroll.Update();
 	}
@@ -1604,10 +1774,20 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (optionsWant > m_ScrollH)
 			optionsWant = m_ScrollH;
 
+		//! The cog and the close button are the only things in the layout
+		//! placed in pixels rather than as a share of the window -- 12px down,
+		//! 28px tall. Everything else, the spoken line included, is a share.
+		//! So the shorter a server makes its window, the further those two
+		//! reach down it, until the line's scroll bar is running underneath
+		//! them and the player cannot press either. Reported 2026-09-23.
+		//!
+		//! The line starts below them whatever size the window is.
+		float topY = SpeechTop(panelH);
+
 		//! Everything from the bottom of the options back up to the line,
 		//! less the room the options are keeping.
 		float optionsBottom = m_ScrollY + m_ScrollH;
-		float room = optionsBottom - m_SpeechY - SpeechGap() - optionsWant;
+		float room = optionsBottom - topY - SpeechGap() - optionsWant;
 		if (room <= 0)
 			return 0;
 
@@ -1623,6 +1803,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (want > room)
 			want = room;
 
+		m_SpeakerLineScroll.SetPos(m_SpeechX, topY);
 		m_SpeakerLineScroll.SetSize(m_SpeechW, want);
 		m_SpeakerLineScroll.Update();
 
@@ -2489,7 +2670,7 @@ class DialogueWindowMenu : UIScriptedMenu
 		}
 
 		ApplyRequiredHeading();
-		ApplyRewardHeading();
+		ApplyRewardHeading(quest);
 		LayoutItemGroups();
 
 		Print("[DialogueFramework] [DIAG] ShowItemDisplay -- " + m_RequiredTiles.Count() + " required, " + m_RewardTiles.Count() + " reward tile(s).");
@@ -2595,6 +2776,7 @@ class DialogueWindowMenu : UIScriptedMenu
 			{
 				m_RewardPreviewObjects.Insert(tileEntity);
 				tilePreview.SetItem(tileEntity);
+				FrameItemPreview(tilePreview, tileEntity);
 			}
 		}
 
@@ -2665,7 +2847,29 @@ class DialogueWindowMenu : UIScriptedMenu
 		heading.SetText(text);
 	}
 
-	protected void ApplyRewardHeading()
+	//! "Reward:" over a list of five items reads as five rewards. When the
+	//! quest hands out one of them, or picks at random, the heading has to say
+	//! so -- otherwise the screen promises what the player will not get.
+	//!
+	//! The wording is Expansion's own, from its quest window: the same
+	//! sentence a player sees in the quest log, already translated into every
+	//! language Expansion ships, and it stays right if they reword it.
+	//! Show the item the way the game shows it everywhere else. An item can
+	//! carry more than one framing in its config -- a bounding box and a view
+	//! for each -- and every preview in DayZ picks the one the item asks for:
+	//! the inventory grid, the inspect window, item icons, drag headers. Ours
+	//! did not, so anything that defines a second framing (a weapon with
+	//! attachments, a flag, a mine) was drawn to the first one and sat badly
+	//! in its tile.
+	protected void FrameItemPreview(ItemPreviewWidget preview, EntityAI item)
+	{
+		if (!preview || !item)
+			return;
+
+		preview.SetView(item.GetViewIndex());
+	}
+
+	protected void ApplyRewardHeading(ExpansionQuestConfig quest)
 	{
 		if (!m_RewardStripLabel)
 			return;
@@ -2674,7 +2878,34 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!heading)
 			return;
 
-		heading.SetText(UIText("#STR_DIALOGUEFW_HEAD_REWARD", "Reward:"));
+		string text = UIText("#STR_DIALOGUEFW_HEAD_REWARD", "Reward:");
+
+		if (quest && quest.GetRewards() && quest.GetRewards().Count() > 1)
+		{
+			if (quest.NeedToSelectReward())
+			{
+				//! "You can select one of the following items:"
+				text = "#STR_EXPANSION_QUEST_MENU_REWARD_LABEL";
+			}
+			else if (quest.RandomReward())
+			{
+				if (quest.GetRewardBehavior() == ExpansionQuestRewardBehavior.RANDOMIZED_ON_COMPLETION)
+				{
+					//! "You get %1 of the following items (randomly selected
+					//! on quest completion):"
+					StringLocaliser randomLabel = new StringLocaliser("STR_EXPANSION_QUEST_MENU_RANDOMREWARD_LABEL", quest.GetRandomRewardAmount().ToString());
+					text = randomLabel.Format();
+				}
+				else
+				{
+					//! Picked when the quest was taken, so the list is what
+					//! they are actually getting: "You get:".
+					text = "#STR_EXPANSION_QUEST_MENU_REWARDS_LABEL";
+				}
+			}
+		}
+
+		heading.SetText(text);
 	}
 
 	protected void LayoutItemGroups()
@@ -3414,6 +3645,7 @@ class DialogueWindowMenu : UIScriptedMenu
 			{
 				m_RewardPreviewObjects.Insert(previewEntity);
 				preview.SetItem(previewEntity);
+				FrameItemPreview(preview, previewEntity);
 			}
 			else
 			{
@@ -3608,8 +3840,19 @@ class DialogueWindowMenu : UIScriptedMenu
 		bool isP2P = window.DialogueFW_IsP2PTrader();
 		int p2pTraderID = window.DialogueFW_P2PTraderID();
 
+		//! Closed, but NOT let go of here. `Close()` does not always run
+		//! `OnHide` before returning -- the engine can leave it until its next
+		//! update -- and dropping the launcher's reference now lets the window
+		//! be collected in between. `OnHide` then runs against an object that
+		//! is already gone, and asking the call queue to forget its methods
+		//! throws a NullPointerError (`Function 'Remove'`, seen 7 times in one
+		//! session on 2026-09-22 and once per empty window before that).
+		//!
+		//! The launcher lets go by itself: the next conversation replaces the
+		//! window it points at, and CloseOpenWindow clears it. Until then it
+		//! holds a closed window that owns nothing -- `OnHide` has already
+		//! freed the buttons and the reward previews.
 		window.Close();
-		DialogueWindowLauncher.GetInstance().ReleaseWindow(window);
 
 	#ifdef EXPANSIONMODP2PMARKET
 		if (openTrader && isP2P)
@@ -3830,7 +4073,7 @@ class DialogueWindowMenu : UIScriptedMenu
 			Print("[DialogueFramework] [ICONS] menuConfigReceived=" + haveConfig + " ShowResponseIcons=" + configWants + " iconWidgetFound=" + widgetFound + " firstIcon=" + iconName + " path=" + ICON_FOLDER + iconName + ICON_EXT);
 
 			if (!icon)
-				Print("[DialogueFramework] [ICONS] DialogueResponseButtonIcon not found in the layout -- the .layout in the built PBO is older than the scripts. Rebuild.");
+				Print("[DialogueFramework] [ICONS] A response button came back without its icon widget. On the first conversation after a client starts, that means the .layout in the built PBO is older than the scripts and the PBO needs repacking. Part-way through a session it is the empty-build problem, and a full game restart clears it.");
 			if (haveConfig == "YES" && configWants == "false")
 				Print("[DialogueFramework] [ICONS] The client received ShowResponseIcons=false. Check MenuConfig.json on the SERVER, then restart the server AND fully restart the client.");
 		}
@@ -4060,10 +4303,18 @@ class DialogueWindowMenu : UIScriptedMenu
 		string display = DialogueFW_FormatText(text);
 
 		TextWidget label = TextWidget.Cast(button.FindAnyWidget("DialogueResponseButtonText"));
+		//! A button with no text is the empty build one level down: the window
+		//! itself came up fine, its buttons did not. The player is left with
+		//! blank bars they cannot read and cannot use, which is worse than no
+		//! window at all -- this one holds their controls. Treated exactly
+		//! like an empty window, and rebuilt from the plain layout.
+		if (!label)
+			m_BuildBroken = true;
+
 		if (!label && !m_LabelCastWarned)
 		{
 			m_LabelCastWarned = true;
-			Print("[DialogueFramework] [UI] [ERROR] DialogueResponseButtonText did not cast to TextWidget -- response buttons will be blank. The .layout in the built PBO is out of step with the scripts; repack the DialogueFramework PBO.");
+			Print("[DialogueFramework] [UI] [ERROR] A response button came back without its text widget -- the buttons will be blank. If every conversation since this client started has been like this, the .layout in the built PBO is out of step with the scripts and the DialogueFramework PBO needs repacking. If conversations were fine until now, it is the empty-build problem instead: the game hands back a layout with nothing inside it, and only a full game restart clears it.");
 		}
 
 		if (label)
@@ -4624,9 +4875,45 @@ class DialogueWindowMenu : UIScriptedMenu
 		return layoutRoot.IsVisible();
 	}
 
+	//! Everything the window cannot do without. The game hands back the layout
+	//! it was asked for, but sometimes with nothing inside it -- the root
+	//! arrives and every widget named in the file is missing. It has been seen
+	//! after a long session of conversations opening and closing over one
+	//! another, and once it starts it lasts until the game is restarted.
+	//!
+	//! Without this check the shell still opens: it takes the player's inputs,
+	//! hides the HUD, and puts an empty box in the corner of the screen with
+	//! nothing to click and no way out but killing the game. That is the state
+	//! in the 1.5.0 report, photographed again on 2026-09-22.
+	protected bool DialogueFW_WindowBuilt()
+	{
+		if (!layoutRoot)
+			return false;
+
+		if (!layoutRoot.FindAnyWidget("DialoguePanel"))
+			return false;
+
+		if (!m_SpeakerLine)
+			return false;
+
+		if (!m_ResponseList)
+			return false;
+
+		return true;
+	}
+
 	override void OnShow()
 	{
 		super.OnShow();
+
+		//! Before the inputs are taken, not after: a window that cannot be used
+		//! must never hold them.
+		if (!DialogueFW_WindowBuilt())
+		{
+			DialogueFW_GiveUpOnBuild("it came up empty, with the game returning the layout with nothing inside it");
+			return;
+		}
+
 		LockPlayerMovement();
 		ResetIconDiagnostics();
 
@@ -4644,7 +4931,31 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_ContentInitialized = true;
 			OpenRootNode();
 			CloseIfEmpty();
+
+			//! Buttons that came back without their text. The window was built
+			//! and has already taken the player's inputs, so closing it is
+			//! what gives them back.
+			if (!m_Closed && m_BuildBroken)
+				DialogueFW_GiveUpOnBuild("its buttons came back with no text in them");
 		}
+	}
+
+	//! One way out for a window that cannot be used, wherever the missing
+	//! pieces were noticed: hand it to the launcher for one more attempt with
+	//! the plain layout, and if that has already been spent, tell the player
+	//! what will actually help them.
+	protected void DialogueFW_GiveUpOnBuild(string what)
+	{
+		Print("[DialogueFramework] [UI] [ERROR] The conversation window is not usable -- " + what + ". Closing it rather than leaving the player holding a window they cannot use.");
+
+		if (!DialogueWindowLauncher.GetInstance().DialogueFW_BuildFailed(this))
+		{
+			Print("[DialogueFramework] [UI] [ERROR] The second attempt was no better -- this client cannot draw a conversation any more, and only a full game restart clears it.");
+			NotifyPlayer("#STR_DIALOGUEFW_NOTIFY_BADWINDOW", "Something went wrong opening that conversation. If it keeps happening, restart your game.", true);
+		}
+
+		m_ContentInitialized = true;
+		EndConversation();
 	}
 
 	//! A window with nothing in it -- no line and no options -- is the empty

@@ -61,9 +61,20 @@ class DialogueFW_FactionSlotBase : eAIFaction
 		eAIBase ai;
 		if (Class.CastTo(ai, other))
 			return false;
+
 		PlayerBase player;
 		if (Class.CastTo(player, other))
+		{
+			//! A friendly faction is only friendly to a player who has not
+			//! fallen out with them. Standing decides it from here, and it
+			//! decides it both ways -- the moment the number climbs back
+			//! above the point, this answers true again on its own.
+			if (player.GetIdentity() && DialogueFW_FactionStanding.IsHostile(player.GetIdentity().GetId(), def))
+				return false;
+
 			return true;
+		}
+
 		return false;
 	}
 }

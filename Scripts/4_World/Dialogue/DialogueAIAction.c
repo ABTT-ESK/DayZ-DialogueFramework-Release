@@ -70,6 +70,18 @@ class DialogueFW_ActionTalkToAI : ActionInteractBase
 		if (!tree)
 			return;
 
+		//! Never over the pause screen. A conversation window on top of it ends
+		//! the game's menu chain, and the pause screen is left behind with
+		//! nothing able to close it -- see DialogueWindowLauncher.OpenDeferred
+		//! for the whole trap. An action already under way when the player
+		//! pauses can still finish here.
+		UIScriptedMenu onScreen = g_Game.GetUIManager().GetMenu();
+		if (onScreen && onScreen.GetID() == MENU_INGAME)
+		{
+			Print("[DialogueFramework] [AI] [WARN] The pause screen is up -- not opening the conversation on top of it.");
+			return;
+		}
+
 		DialogueAISession.GetInstance().Set(tree, tAI, DialogueFW_SpeakerName(tAI));
 		g_Game.GetUIManager().EnterScriptedMenu(MENU_DIALOGUEFW_AI, NULL);
 	}
@@ -111,9 +123,14 @@ modded class PlayerBase
 {
 	override void SetActions(out TInputActionMap InputActionMap)
 	{
-		super.SetActions(InputActionMap);
-
+		//! Before super, not after. Actions are offered in the order they are
+		//! added, so added afterwards "Talk" sat behind Expansion's Recruit
+		//! and View inventory and the player had to scroll past both of them
+		//! to say hello. It only ever appears on AI that has something to say,
+		//! so when it appears it is what the player came for.
 		AddAction(DialogueFW_ActionTalkToAI, InputActionMap);
+
+		super.SetActions(InputActionMap);
 	}
 }
 #endif

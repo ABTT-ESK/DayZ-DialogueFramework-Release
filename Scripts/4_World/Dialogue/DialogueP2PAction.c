@@ -124,6 +124,18 @@ modded class ExpansionActionOpenP2PMarketMenu
 			return;
 		}
 
+		//! Never over the pause screen. A conversation window on top of it ends
+		//! the game's menu chain, and the pause screen is left behind with
+		//! nothing able to close it -- see DialogueWindowLauncher.OpenDeferred
+		//! for the whole trap. An action already under way when the player
+		//! pauses can still finish here.
+		UIScriptedMenu onScreen = g_Game.GetUIManager().GetMenu();
+		if (onScreen && onScreen.GetID() == MENU_INGAME)
+		{
+			Print("[DialogueFramework] [P2P] [WARN] The pause screen is up -- not opening the conversation on top of it.");
+			return;
+		}
+
 		Print("[DialogueFramework] [P2P] Trader opened -- P2P trader ID=" + traderID + ", using tree ID=" + tree.ID + ".");
 
 		DialogueManager.GetInstance().DumpTreeDiagnostic(tree, "P2P " + traderID);

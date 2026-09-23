@@ -32,6 +32,18 @@ modded class ExpansionQuestMenu
 			return;
 		}
 
+		//! Nobody asked for this one: it is the second answer to a talk request,
+		//! or an answer that came back after the player had closed the window
+		//! (see DialogueTalkRequest). Expansion's window goes with it -- the
+		//! player asked for nothing, so nothing should appear in front of them.
+		if (!DialogueTalkRequest.Take(questNPCID))
+		{
+			Print("[DialogueFramework] [DIAG] SetQuests() questNPCID=" + questNPCID + " -- the player did not ask for this conversation (a late or repeated talk request), closing the quest window instead of opening one.");
+			m_DialogueFW_HandedOver = true;
+			CloseMenu();
+			return;
+		}
+
 		DialogueManager.GetInstance().DumpTreeDiagnostic(tree, "INTERACTION questNPCID=" + questNPCID);
 
 		m_DialogueFW_HandedOver = true;

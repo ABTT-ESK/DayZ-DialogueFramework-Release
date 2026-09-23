@@ -70,6 +70,53 @@ NPC, which is how a window appeared with no NPC involved. The hook now acts
 only for the menu `ExpansionUIManager.GetMenu()` says is on screen, and only
 once per menu.
 
+**Never put the window on top of another menu.** The game keeps its menus as a
+chain: each one knows its parent, and `IsMenuOpen`, `CloseMenu` and `CloseAll`
+all walk that chain down from `GetMenu()`. `ShowScriptedMenu(window, null)`
+puts ours on top with *no* parent, so it ends the chain and everything below it
+stops counting as open. With DayZ's pause menu underneath,
+`MissionGameplay.IsPaused()` (which is `IsMenuOpen(MENU_INGAME)`) goes false:
+`Continue()` never closes the pause screen, every Escape calls `Pause()` and
+builds another one, `CloseAllMenus()` misses them all, and they survive leaving
+the server — the player has to kill the game. That is the 1.5.0 report of a
+window that could not be escaped; 1.6.0 only stopped two of *our* windows
+stacking. `OpenDeferred` now refuses to open when anything that isn't a
+conversation window is on screen, and the AI and P2P actions refuse over the
+pause menu. Expansion applies the same rule to its own quest window
+(`RPC_RequestOpenQuestMenu` opens only when both UI managers are empty).
+
+**A talk request outlives the conversation it asked for.** "Talk to ..."
+(`ExpansionActionOpenQuestMenu`) runs on the server, which answers with an RPC
+that opens the quest window — which we turn into a conversation. Press the key
+twice before the first window appears and the second answer comes back the same
+way, after the player has closed the conversation and walked off: a window
+opens in front of them on its own. The client notes each request in
+`DialogueTalkRequest` as the action executes (`OnExecute`, so it also works
+where the player *is* the server), and the conversation spends the note; a
+second answer finds nothing waiting. Requests made while a menu is already on
+screen are never noted — the player's keys are taken then, so they cannot have
+asked.
+
+**A text widget measures its own words a line short.** `GetContentHeight()`
+on the spoken line came back **242px where the words needed 267px** on a
+700-character Russian line (2026-09-23) -- one line, which is exactly the last
+line sitting below the box with its tops showing and the scroll bar already at
+its end. The player who reported it could not reach the end of the speech.
+`SizeSpeakerLine` therefore gives a wrapped speech (`lines > 3`) a whole line
+of slack instead of half, and never less than the character estimate; short
+speeches keep the tight fit so the 1.6.0 gap does not return. The log line
+prints estimate, measurement and the height used, so the next case can be read
+rather than guessed.
+
+**The cog and the close button are the only widgets placed in pixels.**
+`position 12 12`, `size 28 28` in every `dialogue_menu*.layout`, so they always
+end 40px down while everything else is a share of the window. The layout starts
+the spoken line at 13% of the height: fine at the default 0.32 (45px), under
+the buttons at 0.25 (35px), well under them at 0.20 (28px) -- the scroll bar
+then runs beneath them and neither can be clicked. `SpeechTop()` clamps the
+line below `HEADER_BUTTON_PX`; change the layouts and change that constant with
+them.
+
 **Never leave the player without inputs.** `LockPlayerMovement` disables every
 active input except `UAUIBack`. If a window goes away without `OnHide`, the
 player has no movement, no menu key and no way out but killing the game. Three
@@ -708,12 +755,14 @@ per-patrol anger counts in the persisted `DialogueVars` store (keys
 `__aggro_f_<Faction>` / `__aggro_p_<PatrolID>`).
 
 Reset is self-contained per AI — no registry or player enumeration. In the
-modded `eAIBase.CommandHandler`, patrol AI (`m_DialogueFW_PatrolID > 0`) run a
-throttled `DialogueFW_CheckAggroReset` (`CheckInterval`): for each player in
-`GetTargets()`, a dead target clears on `ResetOnDeath`; an alive target clears
-(`eAI_RemoveTarget`) only if the player has a dialogue-aggro count for this
-faction/patrol (`AnyAggroCount > 0` — so ordinary combat is left alone), isn't
-`IsPermanent`, and `PlayerIsCalm` (weapon stowed / left area / surrender).
+modded `eAIBase.CommandHandler`, patrol AI (`m_DialogueFW_PatrolID > 0`, or any
+AI at all once a faction watches a standing — see below) run a throttled
+`DialogueFW_CheckAggroReset` (`CheckInterval`): for each player in
+`GetTargets()`, a dead target clears on `ResetOnDeath`; a player with **no**
+dialogue-aggro count is left alone unless they were just forgiven by a faction
+standing (`JustForgiven`), so ordinary combat is untouched; an alive target with
+a count clears (`eAI_RemoveTarget`) only if the AI is on a patrol, the player
+isn't `IsPermanent`, and `PlayerIsCalm` (weapon stowed / left area / surrender).
 `IsPermanent` compares the count(s) to the *effective* threshold/mode per
 `PersistenceMode`. Per-patrol overrides: `DialogueFW_PatrolConfig` carries
 `PersistentAggroThreshold` (-1 = global) and `PersistenceMode` ("" = global);
@@ -754,12 +803,73 @@ weapon); HOSTILE → both false. Registry is server-only (`DialogueFW_FactionReg
 `Type().ToString()` minus its first 10 characters -- `eAIFactionDialogueFW0`
 becomes `DialogueFW0` -- so `DialogueFW_SpeakerName` suppresses it.
 
-**The practical consequence: a talkable AI has a BLANK speaker name.** There is
-nothing to fall back to -- `DialogueTree` carries no speaker-name field, so the
-window title is empty for every AI conversation. Quest NPCs and traders are
-unaffected (they pass a real name in). Giving an AI a name would mean adding a
-name to the tree and a Forge field for it; until then, write the AI's name into
-its opening line if players need to know who they are talking to.
+**The consequence used to be a BLANK speaker name on every AI conversation.**
+There was nothing to fall back to. **Fixed in 1.7.0** by `DialogueTree`
+`SpeakerName`: a conversation can name its own speaker, and since a
+conversation belongs to one unit of a patrol (`AIPatrolSubID`), that is a name
+per character rather than per patrol. It is written and read with the rest of
+the tree (`OnSend`/`OnRecieve`, last field), translated through
+`DialogueLocKeys.TreeSingle("SpeakerName")`, and applied in
+`ApplySpeakerName`, where it beats the name the opener passed in -- so a quest
+NPC or a trader can be renamed by its conversation too. Empty means "leave the
+name as it was", which is every conversation written before 1.7.0.
+
+## Faction reputation (1.7.0)
+
+`DialogueFW_FactionDef` gained `ReputationVar`, `HostileWhenLow` and
+`HostileBelow`; `WatchesStanding()` is "has a var and acts on it".
+`DialogueFW_FactionRegistry.AnyWatchesStanding()` is a **bool computed once in
+`Load()`**, not a scan -- every patrol AI asks it on every frame before the
+throttled aggro check, so it has to cost nothing.
+
+**Nothing was added for changing a standing, deliberately.** It is an ordinary
+`DialogueVars` variable, so `SetVars` on a response and `RepOnComplete` on a
+quest already move it, and both are *lists* -- which is the whole multi-faction
+feature: +20 here, -5 there, +5 somewhere else, from one hand-in, with no new
+mechanism and no cap on how many factions react.
+
+`DialogueFW_FactionStanding` (4_World, server only) is the rest:
+
+- `IsHostile(uid, def)` is read straight out of the player's state by
+  `DialogueFW_FactionSlotBase.IsFriendlyEntity`. No cache: `GetServerState` is
+  a map hit after the first load and `DialoguePlayerState.Get` is a `Find` over
+  a short array, and a cache here would need invalidating from every path that
+  writes a variable. **Hostility is therefore live** -- the standing changes and
+  the next targeting evaluation already sees it, including for a player who
+  logs in already below the line.
+- `DialogueVars.ApplyServer` brackets its `Apply` with `Remember` /
+  `SettleCrossings`, so **only a standing that actually crossed the point** is
+  acted on. A quest that leaves a faction alone never disturbs a grudge it is
+  entitled to hold. The snapshot is a single static array -- `Apply` is
+  synchronous and one call deep, so there is nothing to key it by.
+- Crossing **up** clears `__aggro_f_<Name>`, which is the only thing in the mod
+  that clears a permanent grudge, and calls `Forgive(uid, faction)`.
+- `Forgive` stamps `uid|faction` with `GetTime() + FORGIVE_WINDOW_MS` (15 s).
+  `DialogueFW_CheckAggroReset` drops a target when `JustForgiven` is true and
+  the player has no dialogue-aggro count. **The window is the point**: dropping
+  a target has to be tied to the moment of crossing, not to the standing being
+  fine, or an AI would let go of a well-standing player who is shooting at
+  them, every two seconds, forever. 15 s only has to outlast one round of
+  `CheckInterval` checks.
+- `DialogueFW_CheckAggroReset` therefore no longer early-returns on
+  `m_DialogueFW_PatrolID <= 0` (the patrol-only rules still do, further down),
+  and its caller also runs for a non-patrol AI when any faction watches a
+  standing.
+
+The player is told by `Tell`, server-side, via
+`ExpansionNotification(factionName, "STR_DIALOGUEFW_FACTION_...")`. The
+window's own reputation toast is raised by the button that was pressed, so a
+quest handed in on Expansion's screen would otherwise change standings in
+silence. **The faction name is the title on purpose**: `CF_Localiser` only
+translates a string starting with `STR_` (and *errors* on a leading `#`), so a
+name passes through untouched while the line under it still arrives in the
+player's language. Gated on `ShowReputationNotifications`.
+
+Faction standing is **not synced to clients**. The standing page in the book is
+built from the trees the client already has, so a faction shows up there by
+pointing one of its conversations' `ReputationVar` at the faction's key --
+which also gives it tiers, an icon and translations for free. A faction with no
+conversation keeps a standing nothing displays; see the roadmap.
 
 ## Credits
 

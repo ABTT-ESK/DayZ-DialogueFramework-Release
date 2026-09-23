@@ -30,7 +30,7 @@ class CfgMods
 		credits = "ABTT ESK";
 		author = "ABTT ESK";
 		authorID = "0";
-		version = "1.6.0";
+		version = "1.7.0";
 		extra = 0;
 		type = "mod";
 		dependencies[] = {"Game", "World", "Mission"};

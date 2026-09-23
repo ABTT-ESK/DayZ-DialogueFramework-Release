@@ -146,7 +146,11 @@ modded class eAIBase
 				return;
 
 			if (GetGame().IsServer())
+			{
+				//! Speed 0 is eAIMovementSpeed.STATIC -- stand still.
 				OverrideMovementSpeed(holdData.param1, 0);
+				Print("[DialogueFramework] [AI] Hold request received: " + holdData.param1 + " for patrol " + m_DialogueFW_PatrolID + ".");
+			}
 		}
 
 		if (sender && rpc_type == DialogueFrameworkRPC.CLIENT_REQUEST_AI_HOSTILE)
@@ -163,6 +167,12 @@ modded class eAIBase
 
 	void DialogueFW_RequestHoldClient(bool hold)
 	{
+		//! Both ends of this are logged: a patrol that walks off mid-sentence
+		//! is either a request that never went, one that never arrived, or the
+		//! AI ignoring the speed it was given, and the three look identical
+		//! from the outside. Reported on 2026-09-22.
+		Print("[DialogueFramework] [AI] Asking the server to hold this one still: " + hold);
+
 		Param1<bool> holdParams = new Param1<bool>(hold);
 		RPCSingleParam(DialogueFrameworkRPC.CLIENT_REQUEST_AI_HOLD, holdParams, true, NULL);
 	}
@@ -189,7 +199,7 @@ modded class eAIBase
 
 	void DialogueFW_CheckAggroReset()
 	{
-		if (!GetGame().IsServer() || m_DialogueFW_PatrolID <= 0)
+		if (!GetGame().IsServer())
 			return;
 
 		array<ref eAITarget> targets = GetTargets();
@@ -222,7 +232,24 @@ modded class eAIBase
 				continue;
 
 			string uid = player.GetIdentity().GetId();
-			if (DialogueAggro.AnyAggroCount(uid, faction, m_DialogueFW_PatrolID) <= 0)
+			int aggroCount = DialogueAggro.AnyAggroCount(uid, faction, m_DialogueFW_PatrolID);
+
+			//! Standing is settled first and on its own terms. A player whose
+			//! number has just climbed back above their faction's hostile
+			//! point is let go here and now -- not once they have stowed
+			//! their weapon or walked far enough away, which is what the
+			//! rules below ask for. It is tied to that moment rather than to
+			//! the standing being fine, so somebody in good standing who
+			//! opens fire is still a target this AI gets to keep.
+			if (aggroCount <= 0)
+			{
+				if (DialogueFW_FactionStanding.JustForgiven(uid, faction))
+					eAI_RemoveTarget(target);
+
+				continue;
+			}
+
+			if (m_DialogueFW_PatrolID <= 0)
 				continue;
 
 			if (DialogueAggro.IsPermanent(uid, faction, m_DialogueFW_PatrolID))
@@ -331,7 +358,7 @@ modded class eAIBase
 	{
 		super.CommandHandler(pDt, pCurrentCommandID, pCurrentCommandFinished);
 
-		if (GetGame().IsServer() && m_DialogueFW_PatrolID > 0)
+		if (GetGame().IsServer() && (m_DialogueFW_PatrolID > 0 || DialogueFW_FactionRegistry.AnyWatchesStanding()))
 		{
 			m_DialogueFW_AggroCheckDelta += pDt;
 			if (m_DialogueFW_AggroCheckDelta >= DialogueAggro.Settings().CheckInterval)

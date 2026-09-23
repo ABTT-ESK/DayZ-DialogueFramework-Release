@@ -33,7 +33,8 @@ folder.** No scripting, and no repacking for anything except voice audio.
 - Optional voice lines, with a talking animation on AI NPCs
 - Talk to Expansion AI you spawn through the mod's own patrol file — each
   patrol carries an ID, so dialogue locks onto the exact unit (two guards in
-  one patrol can say different things)
+  one patrol can say different things), **each with their own name, ranks and
+  reputation**, so a patrol reads exactly like any other character
 - Recruit AI into your group through dialogue, gated by Expansion's own
   recruit settings and optionally by quest progress
 - Make AI turn hostile from a dialogue choice, with a calm-down system
@@ -41,6 +42,11 @@ folder.** No scripting, and no repacking for anything except voice audio.
   grudges, tunable per patrol
 - Define up to 32 of your own AI factions — name, loadout, stance toward
   players, and who they will and won't fight — and assign them to patrols
+- **Factions keep a reputation of their own, and one deed can move several of
+  them at once** — a hand-in can be +20 with the militia, −5 with the two gangs
+  they lean on and +5 with the people those gangs were robbing. A faction can
+  be set to turn on a player whose standing falls to a point you pick, and to
+  calm down again the moment it climbs back
 - A persistent, cross-NPC reputation / variable system: choices change numbers
   that follow the player everywhere, gate individual responses, or swap in a
   whole different conversation; each character can track its own reputation and

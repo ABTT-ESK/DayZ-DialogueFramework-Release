@@ -10,8 +10,9 @@ do. Nothing here has a date attached.
 ### Dialogue for AI you didn't spawn through this mod
 
 AI spawned through the mod's own `AIPatrols.json` can talk: each patrol
-carries an ID and dialogue locks onto the exact unit. DialogueForge's Import
-tab will copy your existing Expansion patrols across for you.
+carries an ID, dialogue locks onto the exact unit, and each unit can have its
+own name and reputation. DialogueForge's Import tab copies your existing
+Expansion patrols across for you.
 
 What's still missing is talking to AI the mod didn't spawn — a guard placed
 by another mod, or one spawned at runtime by something else. That needs a
@@ -24,16 +25,20 @@ the way traders are.
 
 ## Under consideration
 
-**A "random reward" label.** Quests using Expansion's random reward pick
-show every possible reward on the detail screen, which reads as "you get all
-of these" when the player will receive one. Needs a label to say so.
+**A faction's standing where no conversation names it.** Factions keep a
+reputation as of 1.7.0, but the standing page in the book is built from the
+conversations the player has been sent, so a faction's number is only shown
+once one of its conversations points at it. A faction with no talkable AI at
+all — one that exists purely to have an opinion about the player — keeps a
+standing nothing displays. Showing those would mean sending the faction list
+to the client, which nothing else needs yet.
 
-**Item preview framing.** Reward thumbnails use a fixed camera, so unusually
-large or small items can sit awkwardly in their tile.
-
-**Conditions beyond quest and reputation.** Responses can be gated on a
-completed quest, a quest's stage, and a reputation value. Gating on faction,
-items carried, or time of day would open up more roleplay still.
+**Reputation between factions.** A deed's effect on every faction is written
+out per quest, which is what makes it expressive: any faction can react in any
+direction. What it isn't is automatic — two factions that hate each other
+don't know it, so every quest has to say so again. A relations table could
+spread a change outward on its own, at the cost of being much harder to
+predict.
 
 ---
 
@@ -73,6 +78,16 @@ to drive a mouth movement from. Dialogue, quests, trading and voice lines
 all work normally on them; the NPC simply doesn't move while a line plays.
 Use the AI variants (`ExpansionQuestNPCAI*`, `ExpansionTraderAI*`) if you
 want the animation.
+
+**A conversation window can very occasionally come up empty.** The game
+sometimes hands back a window layout with nothing inside it — no panel, no
+speech, no buttons — and once it starts, every conversation in that session
+does the same until the game is restarted. Nothing in the script API resets
+it. The mod notices, closes the empty window before it can take a player's
+controls, and builds it a second time in the standard font, which has so far
+always worked; only if that also comes back empty is the player told to
+restart. It is most easily provoked by forcing two windows open in the same
+moment, which the mod now refuses to do.
 
 **Config changes need a full client restart.** Trees and menu settings are
 sent to players when they connect, so a reconnect won't pick up changes —

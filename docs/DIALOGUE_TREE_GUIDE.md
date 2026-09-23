@@ -111,6 +111,9 @@ in it doesn't work) until you fix it.
 | `ShowWhileQuestID` | int | Optional. Show this response only while that quest is in the state named by `ShowWhileQuestState`. `-1` (default) = no state gating |
 | `ShowWhileQuestState` | string | Which state `ShowWhileQuestID` has to be in: `"NOT_STARTED"`, `"ACTIVE"` (started, not yet handed in), `"READY"` (finished and waiting to be handed in) or `"COMPLETED"`. Empty (default) = no state gating |
 | `ActionType` | string | See [Action types](#action-types) below |
+| `RequiredItems` | list | Optional (1.7.0). Show this response only while the player is carrying these — `{ "ClassName": "Rag", "Amount": 3 }`. Counted anywhere on them, stacks included. Omitted or empty = no such condition |
+| `ShowFromHour` | int | Optional (1.7.0). Show this response only from this hour of the in-game day, `0`–`23`. `-1` (default) = any hour |
+| `ShowToHour` | int | Optional (1.7.0). …and until this hour. A start later than the end wraps over midnight, so `22` to `5` is night. **Both are needed** — `-1` on either shows the option at any hour |
 | `MaxUses` | int | Anti-farm: max times a player may pick this option, ever. `0` (default) = unlimited. After the limit the option disappears — stops reputation-farming by spamming the same choice. In DialogueForge, just set the number; it manages the counter for you |
 | `UsesKey` | string | The hidden per-player counter behind `MaxUses`. DialogueForge generates one when you set a limit — don't invent one, and never reuse the same key on two different options or they share a counter |
 
@@ -286,6 +289,24 @@ by pointing its tree at its own variable with `ReputationVar`:
 Because each character's tree names a different variable, their reputations are
 independent — `rep_hana` and `rep_weapons` move separately, and each character's
 options and greetings gate on their own.
+
+## The name at the top of the window
+
+`SpeakerName` on a tree is what players read above the speech:
+
+```json
+{ "ID": 8170, "AIPatrolID": 170, "AIPatrolSubID": 1, "SpeakerName": "Kolt" }
+```
+
+Leave it out and nothing changes: a quest NPC keeps the name Expansion gave it,
+a trader keeps its own. It exists for **talking AI**, who have no name to take
+— without it their window shows a blank space where every other character has
+a name. A conversation belongs to one member of a patrol, so Kolt and Deen on
+the same patrol are named separately, each in their own tree.
+
+Set it on a quest NPC or a trader and it wins over the name they already have,
+which is one way to give a character an alias. It is translated like any other
+text, under the key `tree.SpeakerName`.
 
 When `ReputationVar` is set, the **dialogue window shows where the player stands**
 next to the speaker's name — the matching tier `Label` (highest `Threshold` at or
@@ -745,6 +766,62 @@ after B.
 
 Neither is a substitute for the other, and both are optional. An option with
 neither is always available.
+
+## Showing an option only while they're carrying something
+
+`RequiredItems` lists what the player has to have on them for the option to
+appear at all:
+
+```jsonc
+{
+  "Text": "I brought the rags.",
+  "NextNodeID": 5,
+  "RequiredItems": [
+    { "ClassName": "Rag", "Amount": 3 }
+  ]
+}
+```
+
+Each entry is an exact DayZ class name and how many. They are counted the way
+Expansion counts a quest's collection objective — **anywhere on the player,
+stacks included** — so a gate and a quest never disagree about what somebody
+is carrying. List more than one and they all have to be met.
+
+The option simply isn't there until they have the items, which reads far
+better than a line that says "come back when you've got them". Pair it with
+`MaxUses: 1` for a one-off hand-over.
+
+> **Testing this with an admin tool?** Items spawned straight into your
+> inventory can fail the check until you drop them and pick them up again —
+> the option reads what your own client knows you are carrying, and a
+> just-spawned item isn't properly in its hands yet. Nothing is wrong with the
+> conversation; drop and re-take, and it appears.
+
+## Showing an option only at certain hours
+
+`ShowFromHour` and `ShowToHour` are hours of the in-game day, `0` to `23`:
+
+```jsonc
+{
+  "Text": "You said to come after dark.",
+  "NextNodeID": 6,
+  "ShowFromHour": 22,
+  "ShowToHour": 5
+}
+```
+
+A start later than the end **wraps over midnight**, so that example covers 22,
+23, 0, 1 and on to 5. Both are needed: `-1` on either (or leaving one out)
+shows the option at any hour, which is how every conversation written before
+1.7.0 behaves.
+
+The hour comes from the world's own time, so it follows whatever day length
+the server runs.
+
+Start and end can be the same hour for a one-hour window — `3` to `3` is
+03:00 to 03:59. The one exception is `0` to `0`, which is read as "any hour":
+an option that leaves both out reads as zero and zero, and would otherwise
+disappear for 23 hours of the day. For the small hours use `0` to `1`.
 
 > Once you have more than a handful of these, open DialogueForge's **Server
 > files** tab and hit **Quest flow report**. It writes `QuestFlow.txt` listing

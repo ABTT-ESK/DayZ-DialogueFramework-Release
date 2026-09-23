@@ -7,6 +7,106 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.7.0]
+
+### Added
+- **A conversation can name its speaker.** Set `"SpeakerName"` on a
+  conversation and that name is shown at the top of the window.
+  - **It gives talking AI a name at last.** An AI has no name of its own — the
+    window showed a blank space where every other character has one. Because
+    one conversation belongs to one member of a patrol, this is a name per
+    character: the two on the same patrol can be Kolt and Deen.
+  - **With reputation, a patrol now reads exactly like anyone else**: name,
+    rank and icon in the same place. Reputation always worked on them; there
+    was simply no name beside it.
+  - It can be translated like any other text, and a quest NPC or trader can
+    use it to override the name the server gave them. Left empty, nothing
+    changes.
+
+- **A faction can keep a reputation, and act on it.** Give a faction a
+  reputation on the Factions tab and it becomes a standing the player has with
+  the whole faction, not with one character.
+  - **One deed can move several factions at once, each its own way.** A quest
+    hand-in already carried a list of reputation changes, and factions go on
+    the same list — doing the militia's dirty work can be +20 with them, −5
+    with the two gangs they lean on and +5 with the people those gangs were
+    robbing. There is no "one pleased, one annoyed" limit: every faction that
+    would have an opinion can have one, in whatever direction, from the one
+    hand-in.
+  - **A faction can turn on a player whose standing falls far enough.** The
+    server owner picks the point. At or below it, that faction's AI stop
+    counting the player as one of their own and open fire.
+  - **They calm down again the moment it climbs back.** Above the point the
+    faction lets go — including the grudge a player had earned by fighting
+    them often enough for it to stick, which nothing could clear before. Being
+    shot at by a faction is now always something a player can work their way
+    out of.
+  - The player is told when either happens, so being shot at is never a
+    mystery: the faction's name and a line under it.
+
+- **An option can be shown only while the player is carrying something.**
+  Name the item and how many — *"Give me the key"* appears when they have the
+  key and not before. Counted the way a quest counts a collection objective:
+  everything on them, stacks included, so a gate and a quest agree about what
+  someone has.
+- **An option can be shown only at certain hours.** Give it a start and an end
+  hour of the in-game day and it appears between them — a start later than the
+  end wraps over midnight, so 22 to 5 is night. The obvious use is a character
+  who only deals after dark.
+- **The reward list says how it pays out.** A quest that gives one of several
+  rewards showed them all under "Reward:", which read as though the player
+  would get every one. The heading now says *"You get 1 of the following
+  items"* or *"You can select one of the following items"*, in the same words
+  Expansion's own quest window uses.
+- **Reward pictures are framed the way the game frames them everywhere else.**
+  An item can carry its own framing for a preview, and DayZ uses it in the
+  inventory, the inspect window and item icons. The mod didn't, so anything
+  with a second framing — a weapon with attachments, a flag, a mine — sat
+  awkwardly in its tile.
+
+### Fixed
+- **A conversation could still open by itself.** Talking to someone is a
+  request that travels to the server and back. Pressing the key twice before
+  the window appeared sent two, and the second answer arrived after the player
+  had closed the conversation and walked away — so a window opened in front of
+  them on its own. Only the conversation the player is actually waiting for
+  opens now; anything that arrives late is dropped.
+- **The pause screen could get stuck on screen.** If the player paused in the
+  moment before a conversation opened, the window landed on top of the pause
+  screen and the game lost track of it: Escape no longer closed it, pressing
+  pause again stacked another one, and it stayed there after leaving the
+  server, so the game had to be shut down. A conversation is no longer opened
+  on top of anything else — the pause screen, the map, the inventory, or one
+  of Expansion's own windows.
+- **A conversation could open with nothing inside it.** Taking a quest that
+  finishes the moment you take it, then talking again in the same second,
+  could leave a small empty box in the corner of the screen holding the
+  player's controls, with nothing to click and no way out but shutting the
+  game down. The conversation now waits for Expansion's own window instead of
+  landing on top of it. If one ever does come up empty anyway, it is built a
+  second time in the standard font; if that comes up empty too, it closes
+  itself and tells the player to restart, rather than trapping them in it.
+- **Controls always come back now.** The check that hands a player their
+  controls back ran after every other mod's, so on a server where another mod
+  was failing every second it never got its turn. It runs first now.
+- **On a small window the speech ran under the cog and the close button.**
+  Those two are the only parts of the window sized in pixels, so the shorter a
+  server's window, the further down they reached — until the scroll bar for
+  the speech sat underneath them and neither could be clicked. The speech now
+  starts below them whatever size the window is.
+- **The end of a very long speech could sit below the window.** A line long
+  enough to be stored in pieces could be given a box shorter than the words in
+  it — the scroll bar reached the bottom with the last lines still out of
+  reach, their tops just visible at the edge. The box is measured again once
+  the text has room, and a line that long is never given less space than its
+  words need.
+- **Talking to an AI is the first thing offered.** On a patrol that has
+  something to say, *Talk* sat behind Expansion's *Recruit* and *View
+  inventory*, so players had to scroll past both to say hello. It comes first
+  now, and it still only appears on AI you have given a conversation to.
+
+---
+
 ## [1.6.0]
 
 ### Added
