@@ -74,6 +74,7 @@ The current tree-level fields are listed in
     "FarewellVoiceLineIDs": [],
 
     "QuestListTexts": [],
+    "QuestListVoiceLineIDs": [],
     "NoQuestsTexts": [],
     "NoQuestsBackTexts": [],
     "NoQuestsLeaveTexts": [],

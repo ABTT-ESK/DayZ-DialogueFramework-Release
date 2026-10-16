@@ -17,6 +17,8 @@ class DialogueP2PSession
 	ref DialogueTree m_PendingTree;
 	string m_PendingName;
 	int m_PendingTraderID = -1;
+	//! The trader's body, which its voice lines play from.
+	Object m_PendingSpeaker;
 
 	static DialogueP2PSession GetInstance()
 	{
@@ -25,8 +27,9 @@ class DialogueP2PSession
 		return s_Instance;
 	}
 
-	void Set(DialogueTree tree, string name, int traderID)
+	void Set(DialogueTree tree, string name, int traderID, Object speaker)
 	{
+		m_PendingSpeaker = speaker;
 		m_PendingTree = tree;
 		m_PendingName = name;
 		m_PendingTraderID = traderID;
@@ -139,7 +142,7 @@ modded class ExpansionActionOpenP2PMarketMenu
 		Print("[DialogueFramework] [P2P] Trader opened -- P2P trader ID=" + traderID + ", using tree ID=" + tree.ID + ".");
 
 		DialogueManager.GetInstance().DumpTreeDiagnostic(tree, "P2P " + traderID);
-		DialogueP2PSession.GetInstance().Set(tree, DialogueFW_P2PTraderName(action_data), traderID);
+		DialogueP2PSession.GetInstance().Set(tree, DialogueFW_P2PTraderName(action_data), traderID, action_data.m_Target.GetParentOrObject());
 		g_Game.GetUIManager().EnterScriptedMenu(MENU_DIALOGUEFW_P2P, NULL);
 	}
 

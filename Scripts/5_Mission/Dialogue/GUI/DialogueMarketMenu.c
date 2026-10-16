@@ -113,7 +113,7 @@ modded class ExpansionMarketMenu
 
 		//! At most one conversation waiting to open, whoever asked for it.
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(DialogueWindowLauncher.GetInstance().OpenDeferred);
-		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(DialogueWindowLauncher.GetInstance().OpenDeferred, 100, false, tree, -1, traderName);
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(DialogueWindowLauncher.GetInstance().OpenDeferred, 100, false, tree, -1, traderName, traderEntity);
 
 		return true;
 	}

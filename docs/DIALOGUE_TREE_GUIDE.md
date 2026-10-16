@@ -72,6 +72,7 @@ in it doesn't work) until you fix it.
 | `GreetingVoiceLineIDs` | string array | One picked at random each time the conversation opens. Empty array = no greeting audio |
 | `FarewellVoiceLineIDs` | string array | One picked at random when the conversation ends via `END_CONVERSATION` |
 | `QuestListTexts` | string array | What the NPC says above the live quest list. One picked at random. Empty = built-in wording |
+| `QuestListVoiceLineIDs` | string array | Optional (1.8.0). One picked at random when the live quest list opens |
 | `NoQuestsTexts` | string array | What the NPC says when they have no quests available. One picked at random. Empty = built-in wording |
 | `NoQuestsBackTexts` | string array | Buttons shown with it that return to `RootNodeID`. Every entry is its own button |
 | `NoQuestsLeaveTexts` | string array | Buttons shown with it that end the conversation |
@@ -655,18 +656,39 @@ only the X.
 
 ## Voice lines
 
-A `VoiceLineIDs` entry like `"Trader_Greeting_1"` expects a matching
-`CfgSoundSets` entry named `DialogueFW_Trader_Greeting_1_SoundSet`, defined
-in the separate `DialogueFramework_SoundSets` addon (that's the *only*
-addon you ever need to repack when adding audio — never this one). If no
-matching SoundSet exists, that line just plays with no audio — never an
-error, never breaks the conversation. This means you can write and test an
-entire tree's branching logic before recording a single line of audio.
+Setting voice lines up in DialogueForge, step by step, is in the
+[DialogueForge guide](https://github.com/ABTT-ESK/Dialogue-Forge/blob/main/docs/GUIDE.md#voice-lines).
 
-For quest-detail steps specifically, the mod looks for voice lines named
-`Quest_<questID>_Start`, `Quest_<questID>_InProgress`, and
-`Quest_<questID>_Complete` automatically — you don't declare these
-anywhere, just add matching SoundSets if you want them voiced.
+A voice line ID is the name of its `.ogg` file without the extension:
+`"Trader_Greeting_1"` plays `Trader_Greeting_1.ogg` from your voice pack
+(see [Voice lines](../README.md#voice-lines) in the README). The voice
+pack's `generate_soundsets.bat` writes the matching
+`DialogueFW_Trader_Greeting_1_SoundSet` for you. Your voice pack is the
+*only* addon you ever repack when adding audio — never this one.
+
+If no matching SoundSet exists, that line is just silent — never an error,
+never breaks the conversation. This means you can write and test an entire
+tree's branching logic before recording a single line of audio. The client
+script log lists every missing one under `[VOICE-AUDIT]` when you connect.
+
+Voice works on every kind of character: quest NPCs, traders (normal and
+P2P) and talking AI. The NPC's mouth moves while a line plays, except on
+static trader and quest objects.
+
+| Where it plays | Field |
+|---|---|
+| Conversation opens | `GreetingVoiceLineIDs` — plays instead of the first node's own line |
+| Conversation ends | `FarewellVoiceLineIDs` |
+| A node is shown | the node's `VoiceLineIDs`, or the chosen extra line's own |
+| Quest list | `QuestListVoiceLineIDs` |
+| No quests available | `NoQuestsVoiceLineIDs` |
+| Quest offer (and cooldown) | `Quest_<questID>_Start` — automatic |
+| Quest in progress | `Quest_<questID>_InProgress` — automatic |
+| Ready to hand in | `Quest_<questID>_Complete` — automatic |
+
+The three quest lines are matched by name: you don't declare them anywhere,
+just record files with those names. Fixed prompts the mod writes itself —
+*"Take your pick."* on a reward choice and the like — are not voiced.
 
 ## Pointing an option at a quest
 

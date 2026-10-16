@@ -892,6 +892,7 @@ class DialogueTree
 	ref array<string> FarewellVoiceLineIDs;
 
 	ref array<string> QuestListTexts;
+	ref array<string> QuestListVoiceLineIDs;
 	ref array<string> NoQuestsTexts;
 	ref array<string> NoQuestsBackTexts;
 	ref array<string> NoQuestsLeaveTexts;
@@ -914,6 +915,7 @@ class DialogueTree
 		GreetingVoiceLineIDs = new array<string>;
 		FarewellVoiceLineIDs = new array<string>;
 		QuestListTexts = new array<string>;
+		QuestListVoiceLineIDs = new array<string>;
 		NoQuestsTexts = new array<string>;
 		NoQuestsBackTexts = new array<string>;
 		NoQuestsLeaveTexts = new array<string>;
@@ -985,6 +987,9 @@ class DialogueTree
 
 		if (!QuestListTexts)
 			QuestListTexts = new array<string>;
+
+		if (!QuestListVoiceLineIDs)
+			QuestListVoiceLineIDs = new array<string>;
 
 		if (!NoQuestsTexts)
 			NoQuestsTexts = new array<string>;
@@ -1064,6 +1069,10 @@ class DialogueTree
 		rpc.Write(QuestListTexts.Count());
 		foreach (string questListLine : QuestListTexts)
 			rpc.Write(questListLine);
+
+		rpc.Write(QuestListVoiceLineIDs.Count());
+		foreach (string questListVoice : QuestListVoiceLineIDs)
+			rpc.Write(questListVoice);
 
 		rpc.Write(NoQuestsTexts.Count());
 		foreach (string noQuestLine : NoQuestsTexts)
@@ -1194,6 +1203,16 @@ class DialogueTree
 			string questListLine;
 			if (!ctx.Read(questListLine)) return false;
 			QuestListTexts.Insert(questListLine);
+		}
+
+		int questListVoiceCount;
+		if (!ctx.Read(questListVoiceCount)) return false;
+		QuestListVoiceLineIDs.Clear();
+		for (int qlv = 0; qlv < questListVoiceCount; qlv++)
+		{
+			string questListVoice;
+			if (!ctx.Read(questListVoice)) return false;
+			QuestListVoiceLineIDs.Insert(questListVoice);
 		}
 
 		int noQuestTextCount;

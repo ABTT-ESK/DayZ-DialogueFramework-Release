@@ -57,6 +57,7 @@ modded class MissionBase
 			//! quests are given by ID.
 			DialogueWindowMenu menu = new DialogueWindowMenu(session.m_PendingTree, -1, session.m_PendingName);
 			menu.DialogueFW_SetP2PTrader(true, session.m_PendingTraderID);
+			menu.DialogueFW_SetSpeakerObject(session.m_PendingSpeaker);
 
 			//! A second attempt after a window came up empty is built from the
 			//! plain layout. See DialogueWindowLauncher.RetryEnterDeferred.

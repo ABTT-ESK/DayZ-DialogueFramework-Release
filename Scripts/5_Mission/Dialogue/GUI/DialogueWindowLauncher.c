@@ -9,6 +9,7 @@ class DialogueWindowLauncher
 	protected ref DialogueTree m_LastTree;
 	protected int m_LastNPCID = -1;
 	protected string m_LastNPCName = "";
+	protected Object m_LastSpeaker;
 	protected bool m_RetryUsed;
 	protected bool m_Retrying;
 
@@ -54,7 +55,10 @@ class DialogueWindowLauncher
 		return s_Instance;
 	}
 
-	void OpenDeferred(DialogueTree tree, int npcID, string npcName)
+	//! `speaker` is the body a trader talks from -- see
+	//! DialogueWindowMenu.m_SpeakerObject. Quest NPCs pass none: the window
+	//! finds them by their NPC ID.
+	void OpenDeferred(DialogueTree tree, int npcID, string npcName, Object speaker = null)
 	{
 		Print("[DialogueFramework] [DIAG] DialogueWindowLauncher.OpenDeferred() firing.");
 
@@ -128,10 +132,12 @@ class DialogueWindowLauncher
 			m_LastTree = tree;
 			m_LastNPCID = npcID;
 			m_LastNPCName = npcName;
+			m_LastSpeaker = speaker;
 			m_RetryUsed = false;
 		}
 
 		m_ActiveWindow = new DialogueWindowMenu(tree, npcID, npcName);
+		m_ActiveWindow.DialogueFW_SetSpeakerObject(speaker);
 		m_RetryOwner = m_ActiveWindow;
 		m_RetryMode = OPENED_BY_LAUNCHER;
 
@@ -236,7 +242,7 @@ class DialogueWindowLauncher
 	void RetryDeferred()
 	{
 		m_Retrying = true;
-		OpenDeferred(m_LastTree, m_LastNPCID, m_LastNPCName);
+		OpenDeferred(m_LastTree, m_LastNPCID, m_LastNPCName, m_LastSpeaker);
 		m_Retrying = false;
 	}
 

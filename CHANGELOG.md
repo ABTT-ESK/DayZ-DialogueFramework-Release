@@ -7,6 +7,54 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.8.0]
+
+### Added
+- **The quest list can be voiced.** `QuestListVoiceLineIDs` plays a line
+  when a quest NPC opens their list of quests, like the no-quests step's
+  `NoQuestsVoiceLineIDs`. DialogueForge has it beside the quest list wording.
+- **The voice pack template is easier to get right.**
+  - `generate_soundsets.bat` builds every line on the game's own character
+    voice sound, the way Expansion's AI voices do.
+  - It takes the pack's name from `$PBOPREFIX$`, so renaming the pack no
+    longer silences every line.
+  - It skips any file whose name would break the pack and says which.
+  - Already have a voice pack? Copy the new `generate_soundsets.bat` into it,
+    run it and repack.
+- **A step-by-step voice guide**, from recording a line to hearing it in
+  game, in the DialogueForge guide. The template's README lists every place a
+  line can be voiced.
+
+### Fixed
+- **On DayZ 1.30 no conversation opened at all.** Pressing F on a quest NPC,
+  trader or P2P trader opened Expansion's own window instead. DayZ 1.30 broke
+  the way the mod lists the files in its profile folder, so the server found
+  no conversations and sent players none. It finds them again. Needs the
+  current Community Framework, which Expansion's 1.30 update also needs.
+  - While it was broken, the server took the Dialogues folder for empty and
+    wrote its example conversation into `Dialogues\NPC_9999\`, over the top
+    of anything already there. If you don't use NPC 9999, delete that
+    folder.
+- **Voice lines never played on traders.** A trader's conversation had no
+  character to play its audio from, so every greeting, line and quest
+  voice on a trader — normal or P2P — was skipped without a word in the log.
+  They now play from the trader, and a talking trader's mouth moves like any
+  other character's.
+- **Two lines could play over each other.** Opening a conversation started
+  the first screen's line and the greeting together. The greeting plays now,
+  and any new line stops the one before it.
+- **Farewell lines were cut off.** The farewell started as the window
+  closed, and closing the window stopped it. It now plays to the end.
+- **A voice line written with its file extension was silent.** `"hello.ogg"`
+  now plays `hello.ogg` the same as `"hello"` does.
+- **The voice check missed lines.** The list of missing voice lines in the
+  client log skipped extra spoken lines, quest-locked conversations and the
+  no-quests step. It covers every voice line now.
+- **A quest on cooldown plays its offer line.** The cooldown screen shows the
+  quest's offer text, but stayed silent.
+
+---
+
 ## [1.7.0]
 
 ### Added

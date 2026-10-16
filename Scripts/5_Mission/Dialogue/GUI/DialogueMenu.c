@@ -49,9 +49,12 @@ modded class ExpansionQuestMenu
 		m_DialogueFW_HandedOver = true;
 		CloseMenu();
 
+		//! A quest NPC is found by its ID, so there is no speaker to pass.
+		Object noSpeaker = null;
+
 		//! At most one conversation waiting to open, whoever asked for it.
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(DialogueWindowLauncher.GetInstance().OpenDeferred);
-		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(DialogueWindowLauncher.GetInstance().OpenDeferred, 100, false, tree, questNPCID, npcName);
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(DialogueWindowLauncher.GetInstance().OpenDeferred, 100, false, tree, questNPCID, npcName, noSpeaker);
 	}
 
 	//! True only for the quest menu Expansion currently has open.

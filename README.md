@@ -199,7 +199,9 @@ complete, working skeleton. Unzip it somewhere outside this folder, then:
    item
 
 Full instructions, audio format requirements and the signing walkthrough are
-in the template's own `README.md`.
+in the template's own `README.md`. Where each line goes in DialogueForge, and
+how to check it plays, is in the
+[DialogueForge guide's voice lines section](https://github.com/ABTT-ESK/Dialogue-Forge/blob/main/docs/GUIDE.md#voice-lines).
 
 The mod works fine with no voice pack at all — lines are simply silent, and
 the client log lists every sound set you haven't recorded yet.

@@ -291,6 +291,11 @@ class DialogueWindowMenu : UIScriptedMenu
 	//! data once the market menu is open.
 	protected int m_P2PTraderID = -1;
 
+	//! The body a trader's voice lines come from. A trader has no quest NPC ID
+	//! and is not a talkable AI, so without this GetTalkingNPC found nobody and
+	//! every line on a trader was silently skipped.
+	protected Object m_SpeakerObject;
+
 	protected ExpansionNPCBase m_TalkingNPC;
 #ifdef EXPANSIONMODAI
 	protected eAIBase m_TalkingNPCAI;
@@ -1515,6 +1520,9 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (m_SpeakerLine)
 			SetSpeakerLine(GetQuestListPrompt());
 
+		if (m_ActiveTree)
+			PlayRandomVoiceLine(m_ActiveTree.QuestListVoiceLineIDs);
+
 		ClearButtons();
 
 		m_CurrentQuests = validQuests;
@@ -2575,6 +2583,7 @@ class DialogueWindowMenu : UIScriptedMenu
 				LogScreen("Cooldown screen");
 				string cooldownNote = string.Format(UIText("#STR_DIALOGUEFW_COOLDOWN", "Not again yet. Come back in %1."), ExpansionStatic.GetTimeString(remaining));
 				detail.SpeakerText = GetDescriptionSafe(descriptions, 0) + "\n\n" + cooldownNote;
+				detail.VoiceLineIDs.Insert("Quest_" + quest.GetID() + "_Start");
 				AddQuestResponses(detail, questText, "NotYetTexts", questText.NotYetTexts, "#STR_DIALOGUEFW_ANOTHERTIME", "Another time, then.", DialogueActionType.END_CONVERSATION);
 				AddBackToConversationResponses(detail, ResolveDetailBackTexts(questText, BACK_SCREEN_OFFER));
 
@@ -3824,8 +3833,21 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (m_ActiveTree && npc)
 		{
 			array<string> farewellPool = m_ActiveTree.FarewellVoiceLineIDs;
-			if (farewellPool)
+			if (farewellPool && farewellPool.Count() > 0)
+			{
+				//! The farewell outlives the window. Closing stops the window's
+				//! own line in OnHide, a frame from now, so a farewell left in
+				//! m_DialogueVoiceSound was cut off before a word of it was
+				//! heard. SEffectManager keeps it registered and frees it when
+				//! it ends; the talk animation runs out on its own timer.
+				StopDialogueVoice();
 				PlayRandomVoiceLineOnObject(farewellPool, npc);
+				m_DialogueVoiceSound = null;
+				m_TalkingNPC = null;
+			#ifdef EXPANSIONMODAI
+				m_TalkingNPCAI = null;
+			#endif
+			}
 		}
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(CloseDeferred, 0, false, this);
@@ -3881,6 +3903,11 @@ class DialogueWindowMenu : UIScriptedMenu
 		m_P2PTraderID = traderID;
 	}
 
+	void DialogueFW_SetSpeakerObject(Object speaker)
+	{
+		m_SpeakerObject = speaker;
+	}
+
 	bool DialogueFW_IsP2PTrader()
 	{
 		return m_IsP2PTrader;
@@ -3893,9 +3920,15 @@ class DialogueWindowMenu : UIScriptedMenu
 
 	protected void PlayRandomVoiceLine(array<string> pool)
 	{
+		if (!pool || pool.Count() == 0)
+			return;
+
 		Object npc = GetTalkingNPC();
 		if (!npc)
+		{
+			Print("[DialogueFramework] [VOICE] No character found to speak from (NPC ID " + m_NPCID + ") -- voice line skipped.");
 			return;
+		}
 
 		PlayRandomVoiceLineOnObject(pool, npc);
 	}
@@ -3914,12 +3947,17 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (voiceLineID == "" || !npc)
 			return;
 
-		string soundSet = "DialogueFW_" + voiceLineID + "_SoundSet";
+		string soundSet = DialogueManager.VoiceSoundSet(voiceLineID);
 		if (!GetGame().ConfigIsExisting("CfgSoundSets " + soundSet))
 		{
 			Print("[DialogueFramework] [VOICE] Missing SoundSet '" + soundSet + "' -- no audio for voice line ID '" + voiceLineID + "'.");
 			return;
 		}
+
+		//! One voice at a time. Opening a conversation plays the first screen's
+		//! line and then the greeting in the same frame, and both used to be
+		//! heard over each other; the greeting wins now.
+		StopDialogueVoice();
 
 		m_DialogueVoiceSound = SEffectManager.PlaySoundOnObject(soundSet, npc);
 		if (!m_DialogueVoiceSound)
@@ -3990,6 +4028,9 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (m_TargetAI)
 			return m_TargetAI;
 	#endif
+
+		if (m_SpeakerObject)
+			return m_SpeakerObject;
 
 		if (m_NPCID == -1)
 			return null;

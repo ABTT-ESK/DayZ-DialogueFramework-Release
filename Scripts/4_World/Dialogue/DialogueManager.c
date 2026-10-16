@@ -275,17 +275,22 @@ class DialogueManager
 			WriteQuestTextExample();
 		}
 
+		//! CF.FindFileEx, not FindFile: DayZ 1.30 broke FindFile for "$profile:"
+		//! paths and backslashes, so it found nothing and every server ran with
+		//! no conversations at all. CF works around it; Expansion uses the same.
 		string fileName;
 		FileAttr attr;
-		FindFileHandle handle = FindFile(QUEST_TEXT_FOLDER + "*.json", fileName, attr, FindFileFlags.ALL);
+		FindFileHandle handle = CF.FindFileEx(QUEST_TEXT_FOLDER + "*.json", fileName, attr, FindFileFlags.ALL);
+		if (handle)
+		{
+			if (fileName != "")
+				LoadQuestTextFile(QUEST_TEXT_FOLDER + fileName);
 
-		if (fileName != "")
-			LoadQuestTextFile(QUEST_TEXT_FOLDER + fileName);
+			while (FindNextFile(handle, fileName, attr))
+				LoadQuestTextFile(QUEST_TEXT_FOLDER + fileName);
 
-		while (FindNextFile(handle, fileName, attr))
-			LoadQuestTextFile(QUEST_TEXT_FOLDER + fileName);
-
-		CloseFindFile(handle);
+			CloseFindFile(handle);
+		}
 
 		Print("[DialogueFramework] Loaded per-quest text for " + m_QuestTexts.Count() + " quest(s).");
 	}
@@ -829,6 +834,25 @@ class DialogueManager
 		}
 	}
 
+	//! The SoundSet a voice line ID plays. Server owners name a line after its
+	//! file, so "hello.ogg" is taken to mean "hello" rather than going silent.
+	static string VoiceSoundSet(string voiceLineID)
+	{
+		string id = voiceLineID.Trim();
+		if (id.Length() > 4)
+		{
+			string tail = id.Substring(id.Length() - 4, 4);
+			tail.ToLower();
+			if (tail == ".ogg")
+				id = id.Substring(0, id.Length() - 4);
+		}
+
+		return "DialogueFW_" + id + "_SoundSet";
+	}
+
+	//! Every authored voice line on the client, checked against the voice packs
+	//! loaded. The quest screens' Quest_<ID>_* lines are left out: each one is
+	//! optional, and most quests will never have them.
 	void AuditVoiceLines()
 	{
 		if (!GetGame().IsClient())
@@ -842,31 +866,19 @@ class DialogueManager
 			if (!tree)
 				continue;
 
-			foreach (string greetingID : tree.GreetingVoiceLineIDs)
-			{
-				checkedCount++;
-				AuditOneVoiceLine(greetingID, missing);
-			}
+			checkedCount += AuditVoicePool(tree.GreetingVoiceLineIDs, missing);
+			checkedCount += AuditVoicePool(tree.FarewellVoiceLineIDs, missing);
+			checkedCount += AuditVoicePool(tree.QuestListVoiceLineIDs, missing);
+			checkedCount += AuditVoicePool(tree.NoQuestsVoiceLineIDs, missing);
+			checkedCount += AuditVoiceNodes(tree.Nodes, missing);
 
-			foreach (string farewellID : tree.FarewellVoiceLineIDs)
-			{
-				checkedCount++;
-				AuditOneVoiceLine(farewellID, missing);
-			}
-
-			if (!tree.Nodes)
+			if (!tree.Stages)
 				continue;
 
-			foreach (DialogueNode node : tree.Nodes)
+			foreach (DialogueTreeStage stage : tree.Stages)
 			{
-				if (!node || !node.VoiceLineIDs)
-					continue;
-
-				foreach (string nodeVoiceID : node.VoiceLineIDs)
-				{
-					checkedCount++;
-					AuditOneVoiceLine(nodeVoiceID, missing);
-				}
+				if (stage)
+					checkedCount += AuditVoiceNodes(stage.Nodes, missing);
 			}
 		}
 
@@ -877,25 +889,58 @@ class DialogueManager
 		}
 
 		Print("[DialogueFramework] [VOICE-AUDIT] " + checkedCount + " voice line ID(s) checked, " + missing.Count() + " with NO matching SoundSet (these will be silent):");
-		foreach (string missingID : missing)
-			Print("[DialogueFramework] [VOICE-AUDIT]   missing: DialogueFW_" + missingID + "_SoundSet");
+		foreach (string missingSet : missing)
+			Print("[DialogueFramework] [VOICE-AUDIT]   missing: " + missingSet);
 	}
 
-	protected void AuditOneVoiceLine(string voiceLineID, array<string> missing)
+	protected int AuditVoiceNodes(array<ref DialogueNode> nodes, array<string> missing)
 	{
-		if (voiceLineID == "")
-			return;
+		if (!nodes)
+			return 0;
 
-		if (GetGame().ConfigIsExisting("CfgSoundSets DialogueFW_" + voiceLineID + "_SoundSet"))
-			return;
-
-		foreach (string alreadyListed : missing)
+		int nodeChecked = 0;
+		foreach (DialogueNode node : nodes)
 		{
-			if (alreadyListed == voiceLineID)
-				return;
+			if (!node)
+				continue;
+
+			nodeChecked += AuditVoicePool(node.VoiceLineIDs, missing);
+
+			if (!node.SpeakerLines)
+				continue;
+
+			foreach (DialogueSpeakerLine line : node.SpeakerLines)
+			{
+				if (line)
+					nodeChecked += AuditVoicePool(line.VoiceLineIDs, missing);
+			}
 		}
 
-		missing.Insert(voiceLineID);
+		return nodeChecked;
+	}
+
+	protected int AuditVoicePool(array<string> pool, array<string> missing)
+	{
+		if (!pool)
+			return 0;
+
+		int poolChecked = 0;
+		foreach (string voiceLineID : pool)
+		{
+			if (voiceLineID == "")
+				continue;
+
+			poolChecked++;
+
+			string soundSet = VoiceSoundSet(voiceLineID);
+			if (GetGame().ConfigIsExisting("CfgSoundSets " + soundSet))
+				continue;
+
+			if (missing.Find(soundSet) == -1)
+				missing.Insert(soundSet);
+		}
+
+		return poolChecked;
 	}
 
 	array<ref DialogueTree> GetAllTrees()
@@ -950,7 +995,8 @@ class DialogueManager
 		array<string> entries = new array<string>;
 		string entryName;
 		FileAttr entryAttr;
-		FindFileHandle handle = FindFile(DIALOGUE_PROFILE_FOLDER + "*", entryName, entryAttr, FindFileFlags.ALL);
+		//! CF.FindFileEx -- see LoadQuestTexts for why not FindFile.
+		FindFileHandle handle = CF.FindFileEx(DIALOGUE_PROFILE_FOLDER + "*", entryName, entryAttr, FindFileFlags.ALL);
 		if (handle)
 		{
 			if (entryName.Length() > 0)
@@ -1315,6 +1361,7 @@ class DialogueManager
 		FPrintln(f, "                    ONE is picked at random per visit, so a handful of");
 		FPrintln(f, "                    phrasings stops a busy NPC sounding scripted.");
 		FPrintln(f, "                    Empty falls back to built-in wording.");
+		FPrintln(f, "QuestListVoiceLineIDs - voice lines for the quest list, one at random.");
 		FPrintln(f, "NoQuestsTexts       - what the NPC says when they have nothing available");
 		FPrintln(f, "                    right now, also one at random.");
 		FPrintln(f, "                    NoQuestsBackTexts / NoQuestsLeaveTexts are");
@@ -1340,12 +1387,17 @@ class DialogueManager
 		FPrintln(f, "  Quest*Texts arrays, then to plain built-in wording.");
 		FPrintln(f, "");
 		FPrintln(f, "Voice line IDs:");
-		FPrintln(f, "  A VoiceLineID of \"Example_Greeting_1\" expects a CfgSoundSets entry");
-		FPrintln(f, "  named \"DialogueFW_Example_Greeting_1_SoundSet\" to exist -- defined in");
-		FPrintln(f, "  the separate DialogueFramework_SoundSets addon, alongside the actual");
-		FPrintln(f, "  .ogg file. See that addon's own README for how to add your own.");
-		FPrintln(f, "  If a VoiceLineID has no matching SoundSet, that line just plays with");
-		FPrintln(f, "  no audio -- it will not error or break the conversation.");
+		FPrintln(f, "  A voice line ID is the name of its .ogg file without the extension:");
+		FPrintln(f, "  \"peter_hello\" plays peter_hello.ogg. It expects a CfgSoundSets entry");
+		FPrintln(f, "  named \"DialogueFW_peter_hello_SoundSet\", which the voice pack's");
+		FPrintln(f, "  generate_soundsets.bat writes for you. The audio lives in that voice");
+		FPrintln(f, "  pack -- a client mod -- never in this profile folder. See the README in");
+		FPrintln(f, "  voice-pack-template.zip.");
+		FPrintln(f, "  Quest screens play fixed IDs by themselves, with nothing to set here:");
+		FPrintln(f, "  Quest_<ID>_Start (offer), Quest_<ID>_InProgress and Quest_<ID>_Complete");
+		FPrintln(f, "  (hand-in), where <ID> is the Expansion quest ID.");
+		FPrintln(f, "  A line with no matching SoundSet stays silent. The client script log");
+		FPrintln(f, "  lists every missing one under [VOICE-AUDIT] when the player connects.");
 		FPrintln(f, "");
 		FPrintln(f, "Validation on load (reported in LoadLog.txt, never fatal):");
 		FPrintln(f, "  - A NextNodeID that doesn't match any node in the file (usually a typo)");
