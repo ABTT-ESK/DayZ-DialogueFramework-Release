@@ -135,6 +135,70 @@ market (`DialogueTraderSession.OpenMarketForCurrentTrader`) has waited 100 ms
 since 1.0.0. The P2P market (`DialogueP2PMarketOpener`) shipped without the
 wait at first and hit exactly that.
 
+**The game can hand back the wrong layout.** With the speaker portrait on,
+from about the fourth conversation `CreateWidgets` on the window's layout
+returned the *response-button* layout -- the one built straight after it in
+every conversation -- and went on doing so until the game was restarted. The
+window guard saw no `DialoguePanel` and reported it as "came up empty", which
+is how it was misread for a long time. The path had built correctly earlier in
+the same session, so the game's record of it was outliving the layout itself
+and the next layout loaded took its place. `DialogueLayoutPins` fixes it: the
+first good window builds one hidden copy of each layout the window uses (both
+the server's font variant and the plain one) and keeps them for the session,
+so nothing is ever let go of. Verified in game: 16 conversations, right layout
+every time, every held copy intact. Without it, five sessions in a row broke
+by the fourth or fifth. Probably the same thing as the long-session reports of
+2026-09-22, though nothing was logged then to prove it.
+
+The check on each held copy has earned its keep. In the final test, the
+first conversation's burst of copies asked for `dialogue_reward_button_inter`
+and got the response button back -- the same swap, mid-burst. It was refused
+("came back as DialogueResponseButton ... not held") and held correctly by the
+next conversation. Worst case, if a session's very first conversation went
+straight to a quest reward screen right then: blank reward buttons for that
+one conversation (every lookup on a reward button is null-checked), never an
+error. Retrying a refused copy on the next frame would close even that.
+
+What did *not* fix it, all tested: unlinking the portrait widget on close,
+one shared portrait widget for the session, and drawing a local copy instead
+of the live NPC. The local copy is kept anyway -- it is how Expansion's
+market (`ExpansionPlayerPreview`) and every other working character preview
+do it: a plain survivor walked up from the speaker's class with
+`ConfigGetBaseName`, made with `CreateObjectEx(..., ECE_LOCAL|ECE_NOLIFETIME)`
+just behind the camera, dressed, `SetPlayer` once per window, `ObjectDelete`d
+on close.
+
+**A voiced farewell is kept past its window.** `EndConversation` lets go of
+the farewell so it can finish after the window closes, which left nothing able
+to stop it: talking to the same character again started the greeting over it.
+It is held in `s_FarewellVoiceSound`, and any new line stops it first.
+
+**A trader's conversation is chosen before the market is drawn.** Expansion
+builds the market in `ExpansionMarketModule.RPC_LoadTraderData`: it sets the
+trader (`GetTrader()`), then `OpenTraderMenu` -> `CreateSVMenu`, which builds
+the menu and calls its `Show()`. The trader's *items* only arrive later, after
+a round trip to the server, and `SetTraderObject` comes with them. Deciding
+there, as 1.0.0-1.8.0 did, left the market on screen for about 40 ms first.
+1.9.0 decides in `ExpansionMarketMenu.Show()` instead, so the market is never
+drawn. Three things in that path are load-bearing:
+
+- **Hide the root, don't just skip `Show()`.** The layout can be visible the
+  moment it's built (the menu's own constructor checks `IsVisible()`).
+- **Close it next frame, not inside `Show()`.** `Show()` runs inside
+  `CreateSVMenu`, and closing destroys the menu (`ScriptView.Destroy` ends in
+  `delete this`) while `CreateSVMenu` still holds it.
+- **`Hide()` before `CloseMenu()`.** The UI manager's `CloseMenu` only calls
+  `Hide()` (and with it the market's `OnHide`: `ExitTrader`, its server
+  listeners removed) for a menu that says it is visible, and this one never
+  was.
+
+The old check in `SetTraderObject` is still there as a fallback for a trader
+that isn't known yet at `Show()`.
+
+**Where the client logs script output.** `Print` on the client goes to
+`%LOCALAPPDATA%\DayZ\script_<date>.log`, not to the `.RPT` beside it. The
+`.RPT` carries engine messages only. Look in the script log first.
+
 **The window needs a strong reference.** It's held by
 `DialogueWindowLauncher`; without that it gets collected before rendering a
 frame.
@@ -611,7 +675,9 @@ added `ShowLanguageButton`; 5 added `ScaleTextWithPanel`; 6 added
 `ShowErrorNotifications`; 7 added `ScrollSpeed`; 8 added
 `ShowReputationNotifications`; 9 added `BookTabName` and `BookPageTitle`; 10
 added the three `BookColumn*` headings; 11 split `FontStyle` into `Font` and
-`TextSize`, folding the old value into the pair. `CURRENT_VERSION` is **11**.
+`TextSize`, folding the old value into the pair; 12 added
+`ShowSpeakerPortrait`, and **13** added `PortraitZoom` and
+`PortraitOffsetY`. `CURRENT_VERSION` is **13**.
 
 `Localization\*.json` files are written by DialogueForge, not upgraded in place
 — they only ever hold keys and text, so there is nothing to migrate.
@@ -896,6 +962,12 @@ It only sees this mod's own files, so anything inherited from
 `UIScriptedMenu`, a CF module base, or the engine has to be added to
 `KNOWN_EXTERNAL` at the top of the script. If it reports an undefined call for
 something that plainly exists, that is what to check first.
+
+**What it does not catch: an over-long concatenation.** Enforce refuses a
+single string expression with too many parts ("Formula too complex"). 18 `+`
+operators with nine numbers failed; the longest that has compiled here is 16.
+Keep a log line to eight or so and split anything longer into several
+`Print`s.
 
 ## The reputation icon
 

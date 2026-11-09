@@ -309,6 +309,81 @@ Set it on a quest NPC or a trader and it wins over the name they already have,
 which is one way to give a character an alias. It is translated like any other
 text, under the key `tree.SpeakerName`.
 
+## The portrait beside the speech
+
+Turn `"ShowSpeakerPortrait": true` on in `MenuConfig.json` and the window draws
+the speaker in its top-left, with the name and their line moved over to sit
+beside it. It is **off by default**, so updating rearranges nothing.
+
+There is nothing to make or install. The portrait is the character themselves,
+rendered live, wearing whatever your server put them in — change their loadout
+and the portrait changes with it. It works for quest NPCs, traders and talking
+AI alike.
+
+Players get the last word: the window's **Settings** screen has a *Speaker
+portrait* row that cycles between the server's choice, always shown and always
+hidden, saved on their own machine like every other setting there.
+
+How close the character is drawn, and which part of them the frame looks at,
+come from `"PortraitZoom"` and `"PortraitOffsetY"` in `MenuConfig.json` — one
+framing for every conversation. MENU_CONFIG_GUIDE.md has the ranges.
+
+If the window can't find a body to draw — a quest NPC the player has walked
+away from, say — no frame is shown and the text keeps the full width.
+
+### Your own artwork instead
+
+To show a drawn portrait rather than the character, set `PortraitImage` on the
+tree to the picture's path **inside a mod of yours**:
+
+```json
+{ "ID": 1001, "NPCIDs": [5], "PortraitImage": "MyServerArt/GUI/portraits/anna.paa" }
+```
+
+Four things to know:
+
+- **The picture has to be in a mod the player loads.** DayZ reads textures out
+  of PBOs, not out of your server's profile folder, so a `$profile:` path
+  cannot work. Ship the art in your own small addon and put its path here.
+- **Forward slashes.** The mod's own textures load with them, and a
+  backslash in a JSON string has to be doubled to survive, so
+  `MyServerArt/GUI/portraits/anna.paa` is the form to write.
+- **`.paa` or `.edds`.** A `.png` or `.jpg` won't load; convert it first.
+  DialogueForge warns you about every one of these before the game ever
+  sees the file.
+- **A path that doesn't load costs you the artwork, not the portrait.** The
+  window falls back to drawing the character, and says why in the log — so a
+  player who hasn't got your art mod still gets a portrait.
+
+### Deciding it from your own mod
+
+For anything the `PortraitImage` field can't express — a portrait per quest
+state, per faction, a different face once the player has earned some standing —
+override one method from your own addon:
+
+```c
+modded class DialogueWindowMenu
+{
+    override string PortraitImagePath()
+    {
+        if (m_NPCID == 5 && /* your condition */)
+            return "MyServerArt/GUI/portraits/anna_angry.paa";
+
+        //! Anything else keeps whatever the conversation asked for.
+        return super.PortraitImagePath();
+    }
+}
+```
+
+`m_NPCID` and `m_ActiveTree` are both in scope. Returning `""` draws the
+character instead.
+
+Two neighbouring methods are overridable for the same reason:
+`PortraitEntity()` chooses *which* character gets rendered (useful for a trader
+with no body of its own), and `ShowPortraitArt()` / `ShowPortraitLive()` fill
+the frame if you want to draw it some other way entirely. Nothing in the mod
+needs repacking to do any of this — it is your addon, loaded alongside.
+
 When `ReputationVar` is set, the **dialogue window shows where the player stands**
 next to the speaker's name — the matching tier `Label` (highest `Threshold` at or
 below the current value), or the raw number if you set no tiers. It updates as

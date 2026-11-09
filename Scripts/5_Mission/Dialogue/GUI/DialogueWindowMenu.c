@@ -12,6 +12,39 @@ class DialogueWindowMenu : UIScriptedMenu
 	//! What the name row says, and how many more frames to try measuring it.
 	protected string m_RepIconShown;
 	protected int m_RepIconRetries;
+
+	//! The portrait, and the two ways of filling it: the character rendered
+	//! live, or a server's own artwork.
+	protected Widget m_PortraitFrame;
+	protected ImageWidget m_PortraitImage;
+	protected PlayerPreviewWidget m_PortraitPlayer;
+
+	//! What the portrait actually shows: a local copy of the speaker that
+	//! this window makes, dresses and deletes -- never the speaker.
+	//!
+	//! This is Expansion's market, step for step (ExpansionPlayerPreview):
+	//! every working character preview in DayZ and Expansion hands the widget
+	//! an entity it made itself and deletes on close, so this does too.
+	//!
+	//! It is NOT what stopped conversations breaking after the fourth one --
+	//! a build with this copy broke exactly the same way. That was the game
+	//! substituting another layout for the window's own; see
+	//! DialogueLayoutPins.
+	protected PlayerBase m_PortraitDummy;
+
+	//! The layout this window asked the game for, so the guard can say what
+	//! came back instead.
+	protected string m_LayoutPathUsed;
+
+	//! The name row and the speech box as the LAYOUT declares them, kept
+	//! apart from m_NameX/m_SpeechX because those two are the live content
+	//! box: the portrait narrows them, and everything that places either
+	//! widget already reads them, so narrowing them is the whole of the
+	//! indent. These are what they go back to when there is no portrait.
+	protected float m_LayoutNameX;
+	protected float m_LayoutNameW;
+	protected float m_LayoutSpeechX;
+	protected float m_LayoutSpeechW;
 	protected RichTextWidget m_SpeakerLine;
 	//! The line as shown, kept so the box can be measured again next frame.
 	protected string m_SpeakerLineText;
@@ -58,6 +91,14 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected string m_NPCName = "";
 	protected EffectSound m_DialogueVoiceSound;
 
+	//! A farewell still playing after its window closed. It belongs to no
+	//! window -- EndConversation lets go of it on purpose so it can finish
+	//! -- so it is kept here, where the next conversation can reach it.
+	//! Without this, talking to someone again while their farewell was
+	//! still going started the greeting on top of it: each window's
+	//! one-voice-at-a-time stop could only reach its own line.
+	protected static EffectSound s_FarewellVoiceSound;
+
 	protected ref array<Widget> m_ResponseButtons;
 	protected ref array<ref DialogueResponse> m_CurrentResponses;
 	protected ref array<ExpansionQuestConfig> m_CurrentQuests;
@@ -89,6 +130,7 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected static const string SETTING_ICONS = "ICONS";
 	protected static const string SETTING_SCROLLSPEED = "SCROLLSPEED";
 	protected static const string SETTING_REPNOTIFY = "REPNOTIFY";
+	protected static const string SETTING_PORTRAIT = "PORTRAIT";
 	protected static const string SETTING_RESET = "RESET";
 
 	protected bool m_ShowingSettings;
@@ -170,6 +212,23 @@ class DialogueWindowMenu : UIScriptedMenu
 	//! Change them in the .layout files and change these with them.
 	protected static const float HEADER_BUTTON_PX = 40;
 	protected static const float HEADER_BUTTON_GAP_PX = 6;
+
+	//! The portrait is square and as tall as the block beside it -- the name
+	//! row plus the spoken line, as the layout declares them -- so it follows
+	//! the window's own proportions and needs no per-text-size constant.
+	//! The gap after it is a share of its own side, so it scales with it.
+	protected static const float PORTRAIT_GAP = 0.12;
+	//! A ceiling on the width, for a window made short and wide: the band
+	//! would otherwise be taller than the panel is wide and the portrait
+	//! would take the whole row.
+	protected static const float PORTRAIT_MAX_SHARE = 0.28;
+	//! Below this there is no face left to read, so it is not worth the room.
+	protected static const float PORTRAIT_MIN_PX = 32;
+
+	//! How far back the character stands, which is DayZ's own inventory
+	//! value from PlayerPreview.c. The other two axes are the server's to
+	//! set: see PortraitFraming below.
+	protected static const float PORTRAIT_MODEL_DEPTH = 0.605;
 
 	protected static const float REP_ICON_SCALE = 0.8;
 	//! Doubled on 2026-09-22: the measured width of a name ends at the last
@@ -528,23 +587,38 @@ class DialogueWindowMenu : UIScriptedMenu
 			Print("[DialogueFramework] [UI] Font: " + fontNote + " -> " + layoutPath);
 		}
 
+		m_LayoutPathUsed = layoutPath;
 		layoutRoot = GetGame().GetWorkspace().CreateWidgets(layoutPath);
 
 		if (!layoutRoot)
 		{
 			Print("[DialogueFramework] [UI] [ERROR] Could not load " + layoutPath + " -- falling back to the default layout.");
 			m_LayoutSuffix = "";
-			layoutRoot = GetGame().GetWorkspace().CreateWidgets(LayoutPath("dialogue_menu"));
+			m_LayoutPathUsed = LayoutPath("dialogue_menu");
+			layoutRoot = GetGame().GetWorkspace().CreateWidgets(m_LayoutPathUsed);
 		}
+
+		//! The window came up right, so every layout it builds from is held
+		//! from here on. See DialogueLayoutPins.
+		if (layoutRoot && layoutRoot.FindAnyWidget("DialoguePanel"))
+			PinLayouts(layoutPath, layoutRoot.GetName());
 
 		m_SpeakerName = TextWidget.Cast(layoutRoot.FindAnyWidget("SpeakerName"));
 		m_ReputationIcon = ImageWidget.Cast(
 			layoutRoot.FindAnyWidget("ReputationIcon"));
 
+		m_PortraitFrame = layoutRoot.FindAnyWidget("SpeakerPortraitFrame");
+		m_PortraitPlayer = PlayerPreviewWidget.Cast(
+			layoutRoot.FindAnyWidget("SpeakerPortraitPlayer"));
+		m_PortraitImage = ImageWidget.Cast(
+			layoutRoot.FindAnyWidget("SpeakerPortraitImage"));
+
 		if (m_SpeakerName)
 		{
 			m_SpeakerName.GetPos(m_NameX, m_NameY);
 			m_SpeakerName.GetSize(m_NameW, m_NameH);
+			m_LayoutNameX = m_NameX;
+			m_LayoutNameW = m_NameW;
 		}
 		m_SpeakerLine = RichTextWidget.Cast(layoutRoot.FindAnyWidget("SpeakerLine"));
 		m_SpeakerLineScroll = ScrollWidget.Cast(layoutRoot.FindAnyWidget("SpeakerLineScroll"));
@@ -574,6 +648,8 @@ class DialogueWindowMenu : UIScriptedMenu
 		{
 			m_SpeakerLineScroll.GetPos(m_SpeechX, m_SpeechY);
 			m_SpeakerLineScroll.GetSize(m_SpeechW, m_SpeechH);
+			m_LayoutSpeechX = m_SpeechX;
+			m_LayoutSpeechW = m_SpeechW;
 		}
 
 		m_ConfirmYesButton = layoutRoot.FindAnyWidget("ConfirmYesButton");
@@ -638,6 +714,12 @@ class DialogueWindowMenu : UIScriptedMenu
 		Widget background = layoutRoot.FindAnyWidget("DialoguePanelBackground");
 		if (background)
 			background.SetColor(m_MenuConfig.GetColor(m_MenuConfig.BackgroundColor));
+
+		//! The portrait's backing takes the window's own colour, so the frame
+		//! reads as part of the panel on a light theme as well as a dark one.
+		//! The artwork and the rendered character sit on top of it either way.
+		if (m_PortraitFrame)
+			m_PortraitFrame.SetColor(m_MenuConfig.GetColor(m_MenuConfig.BackgroundColor));
 
 		if (m_SpeakerName)
 			m_SpeakerName.SetColor(m_MenuConfig.GetColor(m_MenuConfig.SpeakerNameColor));
@@ -810,6 +892,12 @@ class DialogueWindowMenu : UIScriptedMenu
 		if (!m_SpeakerName)
 			return;
 
+		//! Before the name is placed, not after: the portrait decides how wide
+		//! the name row and the spoken line are, and both are laid out from
+		//! here on. Every caller of this follows it with SetSpeakerLine, so
+		//! the speech box is re-measured against the new width straight away.
+		ApplyPortrait();
+
 		//! A conversation that names its own speaker wins. That is the only
 		//! name a talkable AI has -- see DialogueTree.SpeakerName -- and for a
 		//! quest NPC or a trader it is a deliberate override of the name the
@@ -928,6 +1016,384 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_SpeakerName.SetPos(m_NameX, m_NameY);
 			m_SpeakerName.SetSize(m_NameW, m_NameH);
 		}
+	}
+
+	//! Whether a portrait is wanted at all: the player's own answer if they
+	//! gave one in the settings screen, the server's otherwise. Same rule as
+	//! every other setting a player can override.
+	protected bool PortraitWanted()
+	{
+		int chosen = DialogueClientSettings.Get().Portrait;
+
+		if (chosen == DialogueClientSettings.PORTRAIT_ON)
+			return true;
+		if (chosen == DialogueClientSettings.PORTRAIT_OFF)
+			return false;
+
+		if (m_MenuConfig)
+			return m_MenuConfig.ShowSpeakerPortrait;
+
+		return false;
+	}
+
+	//! The plain survivor a speaker is built on, or "" for one that is not a
+	//! character at all.
+	//!
+	//! The copy is made from this rather than from the speaker's own class
+	//! because the market only ever copies a plain survivor -- the player's
+	//! own type -- and Expansion's quest NPCs are AI classes
+	//! (ExpansionQuestNPCAIDenis : eAI_SurvivorM_Denis : SurvivorM_Denis).
+	//! Walking up to SurvivorM_Denis gives the same body and face with none
+	//! of the AI. Every quest NPC in Expansion's config reaches one within two
+	//! steps. The walk is vanilla's own, from PluginConfigViewer.
+	protected string PortraitSurvivorType(string type)
+	{
+		string current = type;
+		string parent;
+
+		for (int i = 0; i < 16; i++)
+		{
+			if (current.IndexOf("SurvivorM_") == 0 || current.IndexOf("SurvivorF_") == 0)
+				return current;
+
+			parent = "";
+			if (!GetGame().ConfigGetBaseName("CfgVehicles " + current, parent))
+				return "";
+			if (parent == "")
+				return "";
+
+			current = parent;
+		}
+
+		return "";
+	}
+
+	//! Make the local copy, exactly as ExpansionPlayerPreview.Update does.
+	//! False means nothing could be made, and the caller shows no portrait.
+	protected bool BuildPortraitDummy(EntityAI who)
+	{
+		string survivor = PortraitSurvivorType(who.GetType());
+		if (survivor == "")
+		{
+			Print("[DialogueFramework] [PORTRAIT] " + who.GetType() + " is not built on a survivor -- no portrait for it.");
+			return false;
+		}
+
+		//! Expansion's note, kept because it is the reason for the position:
+		//! the copy has to be close to the player's viewport or its face does
+		//! not render, so it goes just behind the camera where it is not seen.
+		vector dir = GetGame().GetCurrentCameraDirection();
+		dir.Normalize();
+		vector pos = GetGame().GetCurrentCameraPosition() - dir * 0.5;
+
+		Man player = GetGame().GetPlayer();
+		if (player)
+			pos[1] = player.GetPosition()[1];
+
+		m_PortraitDummy = PlayerBase.Cast(GetGame().CreateObjectEx(survivor, pos, ECE_LOCAL|ECE_NOLIFETIME));
+		if (!m_PortraitDummy)
+		{
+			Print("[DialogueFramework] [PORTRAIT] Could not make a copy of " + survivor + " -- no portrait.");
+			return false;
+		}
+
+		m_PortraitDummy.SetOrientation(who.GetOrientation());
+
+		//! Dressed in what the speaker is wearing.
+		CopyPortraitAttachments(who, m_PortraitDummy);
+
+		return true;
+	}
+
+	//! Every attachment of src made again on dst, and theirs on those.
+	//! ExpansionPlayerPreview.CreateAttachments, unchanged.
+	protected void CopyPortraitAttachments(EntityAI src, EntityAI dst)
+	{
+		if (!src.GetInventory())
+			return;
+
+		for (int i = 0; i < src.GetInventory().AttachmentCount(); i++)
+		{
+			ItemBase srcAttachment = ItemBase.Cast(src.GetInventory().GetAttachmentFromIndex(i));
+			if (srcAttachment)
+			{
+				EntityAI dstAttachment;
+				if (dst.IsInherited(Weapon_Base))
+					dstAttachment = Weapon_Base.Cast(dst).ExpansionCreateInInventory(srcAttachment.GetType());
+				else
+					dstAttachment = dst.GetInventory().CreateAttachment(srcAttachment.GetType());
+				if (dstAttachment)
+					CopyPortraitAttachments(srcAttachment, dstAttachment);
+			}
+		}
+	}
+
+	//! The copy deleted. The market does this when it closes (OnHide drops
+	//! its ExpansionPlayerPreview, whose destructor deletes the entity), and
+	//! so does this window. Safe to call when there is none.
+	protected void DestroyPortraitDummy()
+	{
+		if (m_PortraitDummy)
+			GetGame().ObjectDelete(m_PortraitDummy);
+
+		m_PortraitDummy = null;
+	}
+
+	//! The character widget put away. The copy stays until the window
+	//! closes, so leaving the settings screen and coming back reuses it.
+	protected void HidePortraitBodies()
+	{
+		if (m_PortraitPlayer)
+			m_PortraitPlayer.Show(false);
+	}
+
+	//! How the character is framed: how close, and how far up or down the
+	//! body. The server's, with the shipped framing as the fallback for a
+	//! client whose config has not arrived yet.
+	//!
+	//! Overridable like the rest of the portrait, so a mod can frame one
+	//! character differently from the next -- m_NPCID and m_ActiveTree are
+	//! both in scope.
+	protected void PortraitFraming(out float zoom, out float offsetY)
+	{
+		zoom = DialogueMenuConfig.PORTRAIT_ZOOM_DEFAULT;
+		offsetY = DialogueMenuConfig.PORTRAIT_OFFSET_DEFAULT;
+
+		if (!m_MenuConfig)
+			return;
+
+		zoom = m_MenuConfig.PortraitZoom;
+		offsetY = m_MenuConfig.PortraitOffsetY;
+	}
+
+	//! Artwork to show instead of the live character, or "" to render the
+	//! character themselves.
+	//!
+	//! An override point on purpose. A server that wants its own portraits
+	//! has three ways in, in rising order of effort:
+	//!
+	//!   1. "PortraitImage" on the conversation, pointing into their own
+	//!      addon. No code at all, and DialogueForge has a field for it.
+	//!   2. `modded class DialogueWindowMenu` overriding this, to answer by
+	//!      NPC ID, faction, quest state or anything else they can reach --
+	//!      m_NPCID and m_ActiveTree are both in scope here.
+	//!   3. Overriding ShowPortraitArt / ShowPortraitLive below, to draw the
+	//!      frame some other way entirely.
+	//!
+	//! Returning a path that does not resolve is not a mistake worth
+	//! punishing: ApplyPortrait falls back to the live character, so a typo
+	//! or an addon the player has not got costs them the artwork, not the
+	//! portrait.
+	protected string PortraitImagePath()
+	{
+		if (!m_ActiveTree)
+			return "";
+
+		return m_ActiveTree.PortraitImage;
+	}
+
+	//! The character the live portrait renders. Kept apart from
+	//! GetTalkingNPC() so a mod can answer with a stand-in -- a body for a
+	//! trader that has none of its own, say -- without also changing who
+	//! voice lines come from.
+	protected EntityAI PortraitEntity()
+	{
+		return EntityAI.Cast(GetTalkingNPC());
+	}
+
+	//! A server's own artwork. False means the path named nothing the client
+	//! could load, so the caller falls back to the live character.
+	protected bool ShowPortraitArt(string path)
+	{
+		if (!m_PortraitImage || path == "")
+			return false;
+
+		bool loaded = m_PortraitImage.LoadImageFile(0, path);
+
+		//! Measure it rather than take that answer. In game, a path into
+		//! an addon nobody had still came back true, so the fallback never
+		//! ran and the frame sat empty -- and vanilla ignores this return
+		//! everywhere it calls it, which fits. An image that did not load
+		//! has no size, and that is the part worth believing.
+		int sx;
+		int sy;
+		m_PortraitImage.GetImageSize(0, sx, sy);
+
+		if (!loaded || sx <= 0 || sy <= 0)
+		{
+			Print("[DialogueFramework] [PORTRAIT] PortraitImage \"" + path + "\" could not be loaded (" + sx + "x" + sy + ") -- is that addon on the client? Falling back to the character themselves.");
+			return false;
+		}
+
+		m_PortraitImage.SetImage(0);
+		m_PortraitImage.Show(true);
+
+		HidePortraitBodies();
+
+		return true;
+	}
+
+	//! The character themselves, rendered into the frame. False when there is
+	//! nobody to render -- a quest NPC the player has walked away from, or a
+	//! conversation with no body behind it at all.
+	protected bool ShowPortraitLive()
+	{
+		EntityAI who = PortraitEntity();
+		if (!who)
+		{
+			Print("[DialogueFramework] [PORTRAIT] No character found to render (NPC ID " + m_NPCID + ") -- no portrait shown.");
+			return false;
+		}
+
+		if (!m_PortraitPlayer)
+			return false;
+
+		//! Made, dressed and handed to the widget once per window, the way
+		//! the market does it the first time it needs a preview. Every later
+		//! node reuses the same copy and never calls SetPlayer again.
+		if (!m_PortraitDummy)
+		{
+			if (!BuildPortraitDummy(who))
+				return false;
+
+			m_PortraitPlayer.SetPlayer(m_PortraitDummy);
+		}
+
+		float zoom;
+		float offsetY;
+		PortraitFraming(zoom, offsetY);
+
+		//! y is the vertical one; z is depth, kept at DayZ's own value.
+		m_PortraitPlayer.SetModelPosition(Vector(0, offsetY, PORTRAIT_MODEL_DEPTH));
+		m_PortraitPlayer.SetSize(zoom, zoom);
+		m_PortraitPlayer.Show(true);
+
+		if (m_PortraitImage)
+			m_PortraitImage.Show(false);
+
+		return true;
+	}
+
+	//! The frame's size and place, and the indent the text takes to sit
+	//! beside it.
+	//!
+	//! The indent is applied by narrowing m_NameX/m_NameW and
+	//! m_SpeechX/m_SpeechW, which are the live content box: every other thing
+	//! that places the name or the spoken line already reads those four, so
+	//! narrowing them is the whole of the layout change. m_LayoutName* and
+	//! m_LayoutSpeech* keep what the layout itself asked for, to go back to.
+	//! False when the window has not been laid out yet and there is nothing to
+	//! measure against, so the caller can hide the portrait rather than leave
+	//! it half-applied.
+	protected bool SizePortrait()
+	{
+		if (!m_PortraitFrame || !m_DialoguePanel)
+			return false;
+
+		float panelW;
+		float panelH;
+		m_DialoguePanel.GetScreenSize(panelW, panelH);
+		if (panelW <= 0 || panelH <= 0)
+			return false;
+
+		//! The band the portrait stands in, from the top of the name to the
+		//! bottom of the spoken line as the layout declares it, less a gap so
+		//! its bottom edge does not sit flush against the first response
+		//! button. The same gap it already keeps from the text beside it.
+		float band = ((m_SpeechY + m_SpeechH) - m_NameY) * panelH;
+		float side = band / (1.0 + PORTRAIT_GAP);
+
+		float ceiling = panelW * PORTRAIT_MAX_SHARE;
+		if (side > ceiling)
+			side = ceiling;
+		if (side < PORTRAIT_MIN_PX)
+			side = PORTRAIT_MIN_PX;
+
+		m_PortraitFrame.SetSize(side, side);
+		m_PortraitFrame.SetPos(m_LayoutNameX, m_NameY);
+		m_PortraitFrame.Show(true);
+
+		float indent = (side + side * PORTRAIT_GAP) / panelW;
+
+		m_NameX = m_LayoutNameX + indent;
+		m_NameW = m_LayoutNameW - indent;
+		m_SpeechX = m_LayoutSpeechX + indent;
+		m_SpeechW = m_LayoutSpeechW - indent;
+
+		return true;
+	}
+
+	//! No portrait, and the name and the spoken line back across the whole
+	//! window. Safe to call when there was never one.
+	protected void HidePortrait()
+	{
+		if (m_PortraitFrame)
+			m_PortraitFrame.Show(false);
+
+		HidePortraitBodies();
+
+		if (m_PortraitImage)
+			m_PortraitImage.Show(false);
+
+		m_NameX = m_LayoutNameX;
+		m_NameW = m_LayoutNameW;
+		m_SpeechX = m_LayoutSpeechX;
+		m_SpeechW = m_LayoutSpeechW;
+
+		//! Put the name row back across the window here rather than leaving it
+		//! to whoever calls next. The settings screen hides the portrait AFTER
+		//! HideReputationIcon has already placed the name, so without this the
+		//! title stayed indented beside a frame that was no longer there.
+		if (m_SpeakerName)
+		{
+			m_SpeakerName.SetPos(m_NameX, m_NameY);
+			m_SpeakerName.SetSize(m_NameW, m_NameH);
+		}
+	}
+
+	//! Called from ApplySpeakerName, so the portrait is settled before the
+	//! name is placed and before the spoken line is measured against the box
+	//! -- both of which read the content box this may have just narrowed.
+	protected void ApplyPortrait()
+	{
+		if (!m_PortraitFrame)
+			return;
+
+		if (!PortraitWanted())
+		{
+			HidePortrait();
+			return;
+		}
+
+		//! Artwork first where the owner named some: they meant it, even for
+		//! a character the window could have rendered.
+		bool filled;
+		string art = PortraitImagePath();
+
+		if (art != "")
+		{
+			filled = ShowPortraitArt(art);
+			if (!filled)
+				filled = ShowPortraitLive();
+		}
+		else
+		{
+			filled = ShowPortraitLive();
+		}
+
+		if (!filled)
+		{
+			//! Nothing to put in it, so the text takes the full width back
+			//! rather than sitting beside an empty frame.
+			HidePortrait();
+			return;
+		}
+
+		//! Filled but unmeasurable -- the window has not been laid out yet.
+		//! Hide it rather than leave a frame with no room made for it; the
+		//! next node's ApplySpeakerName comes back through here.
+		if (!SizePortrait())
+			HidePortrait();
 	}
 
 	protected string GetReputationIconFile()
@@ -2111,6 +2577,12 @@ class DialogueWindowMenu : UIScriptedMenu
 			//! This screen is the player's, not the NPC's, so the NPC's
 			//! face has no business sitting next to its title.
 			HideReputationIcon();
+			//! Nor their portrait, for the same reason -- and hiding it gives
+			//! the settings rows the full width of the window to read in.
+			//! Cycling the portrait row re-renders this screen, so the change
+			//! shows on the row's own value and takes hold on the way back to
+			//! the conversation.
+			HidePortrait();
 		}
 		if (m_SpeakerLine)
 			SetSpeakerLine(UIText("#STR_DIALOGUEFW_SETTINGS_HINT", "These are yours alone. They follow you to any server running this mod."));
@@ -2151,6 +2623,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		rowValue = SettingValueRepNotify();
 		rowLabel = UIText("#STR_DIALOGUEFW_SET_REPNOTIFY", "Reputation pop-ups");
 		AddSettingRow(SETTING_REPNOTIFY, rowLabel, rowValue);
+
+		rowValue = SettingValuePortrait();
+		rowLabel = UIText("#STR_DIALOGUEFW_SET_PORTRAIT", "Speaker portrait");
+		AddSettingRow(SETTING_PORTRAIT, rowLabel, rowValue);
 
 		if (DialogueClientSettings.Get().HasAnyOverride())
 		{
@@ -2234,6 +2710,17 @@ class DialogueWindowMenu : UIScriptedMenu
 		return ServerDefaultLabel();
 	}
 
+	protected string SettingValuePortrait()
+	{
+		int portrait = DialogueClientSettings.Get().Portrait;
+		if (portrait == DialogueClientSettings.PORTRAIT_ON)
+			return UIText("#STR_DIALOGUEFW_SET_ON", "shown");
+		if (portrait == DialogueClientSettings.PORTRAIT_OFF)
+			return UIText("#STR_DIALOGUEFW_SET_OFF", "hidden");
+
+		return ServerDefaultLabel();
+	}
+
 	protected string SettingValueIcons()
 	{
 		int icons = DialogueClientSettings.Get().Icons;
@@ -2303,6 +2790,17 @@ class DialogueWindowMenu : UIScriptedMenu
 				settings.RepNotify = DialogueClientSettings.NOTIFY_OFF;
 			else
 				settings.RepNotify = DialogueClientSettings.NOTIFY_SERVER;
+
+			settings.Save();
+		}
+		else if (key == SETTING_PORTRAIT)
+		{
+			if (settings.Portrait == DialogueClientSettings.PORTRAIT_SERVER)
+				settings.Portrait = DialogueClientSettings.PORTRAIT_ON;
+			else if (settings.Portrait == DialogueClientSettings.PORTRAIT_ON)
+				settings.Portrait = DialogueClientSettings.PORTRAIT_OFF;
+			else
+				settings.Portrait = DialogueClientSettings.PORTRAIT_SERVER;
 
 			settings.Save();
 		}
@@ -2464,7 +2962,11 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		//! Traders / AI (NPC ID -1) have no quest identity, so nothing "belongs"
 		//! to them -- otherwise a quest listing -1 as a giver/turn-in would match.
-		if (m_NPCID <= 0)
+		//!
+		//! Only -1 is excluded, not every id below 1: Expansion accepts 0 as a
+		//! quest NPC ID, and testing "<= 0" used to deny that NPC its own
+		//! quests.
+		if (m_NPCID < 0)
 			return false;
 
 		array<int> givers = questConfig.GetQuestGiverIDs();
@@ -2486,7 +2988,11 @@ class DialogueWindowMenu : UIScriptedMenu
 		//! Traders and AI open with an NPC ID of -1. QuestDisplayConditions only
 		//! filters by giver/turn-in NPC when the ID is > -1, so passing -1 through
 		//! returns every quest the player is eligible for, server-wide.
-		if (m_NPCID <= 0)
+		//!
+		//! 0 is a real quest NPC ID as far as Expansion is concerned, so it
+		//! must reach QuestDisplayConditions like any other -- the old "<= 0"
+		//! showed that NPC an empty quest list.
+		if (m_NPCID < 0)
 		{
 			Print("[DialogueFramework] [QUEST] SHOW_QUEST_LIST used on a conversation with no quest-NPC ID (a trader or AI, NPC ID=" + m_NPCID + "). Showing no quests -- use OFFER_QUEST / TURN_IN_QUEST with a QuestID to give quests here.");
 			return result;
@@ -2616,6 +3122,26 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected string LayoutPath(string baseName)
 	{
 		return "DialogueFramework/GUI/layouts/" + baseName + m_LayoutSuffix + ".layout";
+	}
+
+	//! Hold every layout this window builds from, in the server's variant and
+	//! in the plain one the retry falls back to. The first window of the
+	//! session does the work; every later call finds them already held.
+	protected void PinLayouts(string windowPath, string windowRoot)
+	{
+		string plain = "DialogueFramework/GUI/layouts/";
+
+		DialogueLayoutPins.Pin(windowPath, windowRoot);
+		DialogueLayoutPins.Pin(plain + "dialogue_menu.layout", "DialogueMenuRoot");
+
+		DialogueLayoutPins.Pin(LayoutPath("dialogue_response_button"), "DialogueResponseButton");
+		DialogueLayoutPins.Pin(plain + "dialogue_response_button.layout", "DialogueResponseButton");
+
+		DialogueLayoutPins.Pin(LayoutPath("dialogue_reward_button"), "DialogueRewardButton");
+		DialogueLayoutPins.Pin(plain + "dialogue_reward_button.layout", "DialogueRewardButton");
+
+		DialogueLayoutPins.Pin(LayoutPath("dialogue_reward_display"), "DialogueRewardDisplay");
+		DialogueLayoutPins.Pin(plain + "dialogue_reward_display.layout", "DialogueRewardDisplay");
 	}
 
 	protected bool IsQuestOnCooldown(ExpansionQuestConfig quest, out int remaining)
@@ -3842,6 +4368,9 @@ class DialogueWindowMenu : UIScriptedMenu
 				//! it ends; the talk animation runs out on its own timer.
 				StopDialogueVoice();
 				PlayRandomVoiceLineOnObject(farewellPool, npc);
+				s_FarewellVoiceSound = m_DialogueVoiceSound;
+				bool farewellStarted = s_FarewellVoiceSound != null;
+				Print("[DialogueFramework] [VOICE] Farewell started and handed on past the window: " + farewellStarted);
 				m_DialogueVoiceSound = null;
 				m_TalkingNPC = null;
 			#ifdef EXPANSIONMODAI
@@ -3956,7 +4485,9 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		//! One voice at a time. Opening a conversation plays the first screen's
 		//! line and then the greeting in the same frame, and both used to be
-		//! heard over each other; the greeting wins now.
+		//! heard over each other; the greeting wins now. A farewell left over
+		//! from the last conversation is stopped too.
+		StopFarewellVoice();
 		StopDialogueVoice();
 
 		m_DialogueVoiceSound = SEffectManager.PlaySoundOnObject(soundSet, npc);
@@ -4012,6 +4543,22 @@ class DialogueWindowMenu : UIScriptedMenu
 			m_TalkingNPCAI = null;
 		}
 	#endif
+	}
+
+	//! The last conversation's farewell, if it is still going. Walking away
+	//! lets it finish; starting another line stops it.
+	protected void StopFarewellVoice()
+	{
+		if (!s_FarewellVoiceSound)
+			return;
+
+		bool stillPlaying = s_FarewellVoiceSound.IsSoundPlaying();
+		Print("[DialogueFramework] [VOICE] A new line is starting -- stopping the last farewell (still playing: " + stillPlaying + ").");
+
+		if (stillPlaying)
+			s_FarewellVoiceSound.Stop();
+
+		s_FarewellVoiceSound = null;
 	}
 
 	protected void StopDialogueVoice()
@@ -4916,11 +5463,14 @@ class DialogueWindowMenu : UIScriptedMenu
 		return layoutRoot.IsVisible();
 	}
 
-	//! Everything the window cannot do without. The game hands back the layout
-	//! it was asked for, but sometimes with nothing inside it -- the root
-	//! arrives and every widget named in the file is missing. It has been seen
-	//! after a long session of conversations opening and closing over one
-	//! another, and once it starts it lasts until the game is restarted.
+	//! Everything the window cannot do without. Sometimes the game does not
+	//! hand back the layout it was asked for at all: in 1.9.0 testing,
+	//! CreateWidgets on the window's layout returned the response-button
+	//! layout instead -- no DialoguePanel, so this reads as "came up empty".
+	//! Once it starts it lasts until the game is restarted. With the speaker
+	//! portrait on it began within four conversations; it had been seen
+	//! before that only after a long session (the 2026-09-22 reports), and
+	//! may well be the same thing. DialogueLayoutPins is what prevents it.
 	//!
 	//! Without this check the shell still opens: it takes the player's inputs,
 	//! hides the HUD, and puts an empty box in the corner of the screen with
@@ -4929,10 +5479,21 @@ class DialogueWindowMenu : UIScriptedMenu
 	protected bool DialogueFW_WindowBuilt()
 	{
 		if (!layoutRoot)
+		{
+			Print("[DialogueFramework] [UI] [ERROR] Asked the game for " + m_LayoutPathUsed + " and got nothing back.");
 			return false;
+		}
 
 		if (!layoutRoot.FindAnyWidget("DialoguePanel"))
+		{
+			//! Say what came back. In 1.9.0 testing it was another of our
+			//! layouts entirely, which read as an empty window until it was
+			//! logged. See DialogueLayoutPins.
+			string gotName = layoutRoot.GetName();
+			string gotType = layoutRoot.GetTypeName();
+			Print("[DialogueFramework] [UI] [ERROR] Asked the game for " + m_LayoutPathUsed + " and got " + gotName + " (" + gotType + ") instead.");
 			return false;
+		}
 
 		if (!m_SpeakerLine)
 			return false;
@@ -5040,6 +5601,12 @@ class DialogueWindowMenu : UIScriptedMenu
 
 		ClearButtons();
 
+		//! Put the portrait away and delete the copy it was showing -- the
+		//! market's OnHide does the same. Only ever the copy: the speaker
+		//! themselves is never handed to the widget, so never deleted here.
+		HidePortraitBodies();
+		DestroyPortraitDummy();
+
 	#ifdef EXPANSIONMODAI
 		if (m_TargetAI)
 			m_TargetAI.DialogueFW_RequestHoldClient(false);
@@ -5054,6 +5621,10 @@ class DialogueWindowMenu : UIScriptedMenu
 		Print("[DialogueFramework] [DIAG] ~DialogueWindowMenu() destructor fired.");
 
 		DestroyRewardPreviews();
+
+		//! Normally already gone in OnHide; this catches a window torn down
+		//! without one, as ExpansionPlayerPreview's own destructor does.
+		DestroyPortraitDummy();
 	}
 
 	protected void LockPlayerMovement()

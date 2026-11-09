@@ -16,6 +16,7 @@ class DialogueManager
 	protected const string SHARED_SUBFOLDER = "Shared";
 	protected const string NPC_FOLDER_PREFIX = "NPC_";
 	protected const string TRADER_FOLDER_PREFIX = "Trader_";
+	protected const string DIGITS = "0123456789";
 
 	protected ref map<int, ref DialogueTree> m_TreesByNPCID;
 
@@ -1041,9 +1042,7 @@ class DialogueManager
 			if (entry.Length() > NPC_FOLDER_PREFIX.Length() && entry.IndexOf(NPC_FOLDER_PREFIX) == 0)
 			{
 				string idPart = entry.Substring(NPC_FOLDER_PREFIX.Length(), entry.Length() - NPC_FOLDER_PREFIX.Length());
-				folderNPCID = idPart.ToInt();
-				if (folderNPCID == 0)
-					folderNPCID = -1;
+				folderNPCID = FolderNPCIDFromText(idPart);
 			}
 
 			string subfolder = DIALOGUE_PROFILE_FOLDER + entry + "\\";
@@ -1067,6 +1066,30 @@ class DialogueManager
 			relative = relative.Substring(DIALOGUE_PROFILE_FOLDER.Length(), relative.Length() - DIALOGUE_PROFILE_FOLDER.Length());
 
 		return DialogueLocPath.Normalize(relative);
+	}
+
+	//! The id in a NPC_<id> folder name, or -1 when the folder is not named
+	//! after one.
+	//!
+	//! Reading the digits ourselves rather than trusting ToInt(): Enforce
+	//! answers 0 for any text it cannot read as a number, so "NPC_0" and
+	//! "NPC_rubbish" both arrived as 0 and the old guard threw both away. That
+	//! is why a quest NPC whose Expansion ID really is 0 never loaded -- the
+	//! folder looked like a typo. Every id Expansion accepts is a plain run of
+	//! digits, so anything else is the typo this is meant to catch, and 0
+	//! passes through like any other number.
+	protected int FolderNPCIDFromText(string idPart)
+	{
+		if (idPart == "")
+			return -1;
+
+		for (int i = 0; i < idPart.Length(); i++)
+		{
+			if (DIGITS.IndexOf(idPart.Get(i)) == -1)
+				return -1;
+		}
+
+		return idPart.ToInt();
 	}
 
 	protected void LoadTreeFile(string fullPath, int folderNPCID, string folderTraderID, inout int treeCount, inout int npcCount)
@@ -1335,6 +1358,21 @@ class DialogueManager
 		FPrintln(f, "                    wins. Each stage's node IDs are separate from the");
 		FPrintln(f, "                    base tree and every other stage. Empty = only the");
 		FPrintln(f, "                    base tree is ever used.");
+		FPrintln(f, "  PortraitImage   - optional. Your own portrait artwork for this");
+		FPrintln(f, "                    character, as a path inside a mod YOUR PLAYERS");
+		FPrintln(f, "                    load -- \"MyServerArt/GUI/portraits/anna.paa\".");
+		FPrintln(f, "                    A $profile: path cannot work: the game reads");
+		FPrintln(f, "                    textures out of PBOs, so the art has to ship in");
+		FPrintln(f, "                    an addon. Empty (the normal case) draws the");
+		FPrintln(f, "                    character themselves, in whatever you dressed");
+		FPrintln(f, "                    them in, with no art needed. Either way the");
+		FPrintln(f, "                    portrait only shows when MenuConfig.json has");
+		FPrintln(f, "                    \"ShowSpeakerPortrait\": true, and each player can");
+		FPrintln(f, "                    turn it off in the window's Settings screen.");
+		FPrintln(f, "                    How close the character is drawn, and how far up");
+		FPrintln(f, "                    or down the body the frame looks, are set once");
+		FPrintln(f, "                    for every conversation by \"PortraitZoom\" and");
+		FPrintln(f, "                    \"PortraitOffsetY\" in MenuConfig.json.");
 		FPrintln(f, "  Nodes           - array of DialogueNode");
 		FPrintln(f, "");
 		FPrintln(f, "DialogueNode fields:");

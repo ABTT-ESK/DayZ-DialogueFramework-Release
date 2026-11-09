@@ -7,6 +7,51 @@ middle number changes when features are added, the last when only fixes are.
 
 ---
 
+## [1.9.0]
+
+### Added
+- **A portrait of whoever is speaking.** `"ShowSpeakerPortrait": true` in
+  `MenuConfig.json` draws the speaker in the top-left of the window, with
+  their name and line moved over beside it. Off by default, so updating
+  rearranges nothing.
+  - Nothing to make or install: it is the character themselves, in whatever
+    loadout your server gave them. Quest NPCs, traders and talking AI alike.
+  - Your own artwork instead with `"PortraitImage"` on a conversation,
+    pointing into a mod of yours. A path that won't load falls back to the
+    character rather than leaving an empty frame.
+  - Anything more involved than a fixed picture -- a portrait per quest state
+    or faction -- by overriding `PortraitImagePath()` from your own addon.
+    See DIALOGUE_TREE_GUIDE.md.
+  - How they are framed is yours to set: `"PortraitZoom"` for how close they
+    are drawn, from a whole body to a face, and `"PortraitOffsetY"` for which
+    part of them the frame looks at. Both have sliders in Dialogue Forge.
+  - Players can force it on or off for themselves under *Speaker portrait* in
+    the window's Settings screen.
+
+### Fixed
+- **A quest NPC with an ID of 0 could not be given a conversation.** Expansion
+  accepts 0 as a quest NPC ID, but four places here treated it as "no NPC":
+  - A `NPC_0\` folder was read as an unreadable name, so the conversation in
+    it loaded with no NPC attached and was skipped.
+  - `SHOW_QUEST_LIST` showed that NPC an empty list.
+  - Quests the NPC gives or takes back weren't recognised as theirs, so
+    reward strips and quest chains came up blank.
+  - DialogueForge warned "Folder name doesn't contain a usable quest NPC ID"
+    on a folder that was correct, and dropped 0 from a Shared conversation's
+    NPC list.
+
+  Only -1 means "no quest NPC" now, which is what Expansion itself uses.
+- **Talking to a trader flashed their market on screen for a moment** before
+  the conversation opened. The conversation is now chosen before the market
+  is drawn, so it never appears.
+- **A voiced character talked over themselves if you spoke to them again
+  straight away.** Their farewell is left to finish after the window closes,
+  but nothing could stop it once it had -- so reopening the conversation
+  started the greeting on top of it. Any new line now stops a farewell that
+  is still going; walking away still lets it play to the end.
+
+---
+
 ## [1.8.0]
 
 ### Added

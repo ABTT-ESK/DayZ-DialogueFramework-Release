@@ -23,6 +23,10 @@ class DialogueClientSettings
 	static const int NOTIFY_ON = 1;
 	static const int NOTIFY_OFF = 2;
 
+	static const int PORTRAIT_SERVER = 0;
+	static const int PORTRAIT_ON = 1;
+	static const int PORTRAIT_OFF = 2;
+
 	string Language = "";
 
 	string Position = "";
@@ -38,6 +42,14 @@ class DialogueClientSettings
 	//! Whether the pop-up naming who a choice pleased or annoyed is shown.
 	//! Zero means the server's setting is used.
 	int RepNotify = NOTIFY_SERVER;
+
+	//! Whether the speaker's portrait is shown, and the window's text makes
+	//! room for it. Zero means the server's setting is used.
+	//!
+	//! A player override either way: someone who finds the portrait a
+	//! distraction can turn it off on a server that has it on, and someone
+	//! who wants one can turn it on where the owner left it off.
+	int Portrait = PORTRAIT_SERVER;
 
 	protected static ref DialogueClientSettings s_Instance;
 
@@ -75,6 +87,9 @@ class DialogueClientSettings
 		if (RepNotify != NOTIFY_ON && RepNotify != NOTIFY_OFF)
 			RepNotify = NOTIFY_SERVER;
 
+		if (Portrait != PORTRAIT_ON && Portrait != PORTRAIT_OFF)
+			Portrait = PORTRAIT_SERVER;
+
 		if (ScrollSpeed != SCROLL_SPEED_SERVER)
 		{
 			if (ScrollSpeed < DialogueMenuConfig.SCROLL_SPEED_MIN)
@@ -90,7 +105,7 @@ class DialogueClientSettings
 		{
 			JsonFileLoader<DialogueClientSettings>.JsonLoadFile(SETTINGS_FILE, this);
 			Sanitize();
-			Print("[DialogueFramework] [SETTINGS] Loaded player settings: language='" + Language + "' position='" + Position + "' textScale=" + TextScale + " icons=" + Icons + " scrollSpeed=" + ScrollSpeed + " repNotify=" + RepNotify);
+			Print("[DialogueFramework] [SETTINGS] Loaded player settings: language='" + Language + "' position='" + Position + "' textScale=" + TextScale + " icons=" + Icons + " scrollSpeed=" + ScrollSpeed + " repNotify=" + RepNotify + " portrait=" + Portrait);
 			return;
 		}
 
@@ -130,6 +145,7 @@ class DialogueClientSettings
 		Icons = ICONS_SERVER;
 		ScrollSpeed = SCROLL_SPEED_SERVER;
 		RepNotify = NOTIFY_SERVER;
+		Portrait = PORTRAIT_SERVER;
 		Save();
 	}
 
@@ -146,6 +162,8 @@ class DialogueClientSettings
 		if (ScrollSpeed != SCROLL_SPEED_SERVER)
 			return true;
 		if (RepNotify != NOTIFY_SERVER)
+			return true;
+		if (Portrait != PORTRAIT_SERVER)
 			return true;
 
 		return false;

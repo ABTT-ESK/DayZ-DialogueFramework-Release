@@ -133,7 +133,17 @@ class DialogueMenuTextSize
 
 class DialogueMenuConfig
 {
-	static const int CURRENT_VERSION = 11;
+	static const int CURRENT_VERSION = 13;
+
+	//! What the portrait framing will accept. The zoom range is DayZ's
+	//! own, from PlayerPreview.c; the offset range covers Expansion's
+	//! head-to-feet span with room either side.
+	static const float PORTRAIT_ZOOM_MIN = 0.62;
+	static const float PORTRAIT_ZOOM_MAX = 3.0;
+	static const float PORTRAIT_ZOOM_DEFAULT = 1.0;
+	static const float PORTRAIT_OFFSET_MIN = -1.0;
+	static const float PORTRAIT_OFFSET_MAX = 1.0;
+	static const float PORTRAIT_OFFSET_DEFAULT = -0.25;
 	int ConfigVersion = 0;
 
 	//! What a scroll speed is allowed to be, wherever it is set -- this file
@@ -188,6 +198,33 @@ class DialogueMenuConfig
 	//! A short pop-up naming who a choice pleased or annoyed, and by how
 	//! much. Off leaves reputation changing silently, as it did before.
 	bool ShowReputationNotifications = true;
+
+	//! A portrait of whoever is speaking, in the top-left of the window, with
+	//! the name and the spoken line indented to sit beside it.
+	//!
+	//! Not a picture file: the character themselves, rendered live, so the
+	//! portrait is whatever the server dressed them in and no art has to be
+	//! shipped or configured. A speaker the window cannot find -- a quest NPC
+	//! out of the player's bubble, say -- shows no portrait and the text goes
+	//! back to the full width, so nothing is left as a blank frame.
+	//!
+	//! Off by default: it changes how every conversation is laid out, so an
+	//! existing server keeps the window it already had until its owner asks
+	//! for this.
+	bool ShowSpeakerPortrait = false;
+
+	//! How close the character is drawn in the portrait frame. Larger is
+	//! nearer: about 0.7 fits a whole body in, 1.0 is head and chest,
+	//! 2.0 and up is a face. DayZ's own inventory preview works the same
+	//! way and will not go outside 0.62 to 3.
+	float PortraitZoom = PORTRAIT_ZOOM_DEFAULT;
+
+	//! How far up or down the body the frame looks. Negative looks
+	//! higher -- Expansion's own preview uses -0.75 to centre a hat and
+	//! +0.625 to centre boots, which is the scale this is on. Raise it
+	//! (towards +1) to see more of the legs, lower it to fill the frame
+	//! with the face.
+	float PortraitOffsetY = PORTRAIT_OFFSET_DEFAULT;
 
 	//! What the standing page in Expansion's book calls itself: the name on
 	//! its tab, and the heading on the page. Left empty, both fall back to
@@ -283,6 +320,11 @@ class DialogueMenuConfig
 
 		if (ScrollSpeed < SCROLL_SPEED_MIN || ScrollSpeed > SCROLL_SPEED_MAX)
 			ScrollSpeed = 1.0;
+
+		if (PortraitZoom < PORTRAIT_ZOOM_MIN || PortraitZoom > PORTRAIT_ZOOM_MAX)
+			PortraitZoom = PORTRAIT_ZOOM_DEFAULT;
+		if (PortraitOffsetY < PORTRAIT_OFFSET_MIN || PortraitOffsetY > PORTRAIT_OFFSET_MAX)
+			PortraitOffsetY = PORTRAIT_OFFSET_DEFAULT;
 
 		FontStyle.ToUpper();
 		if (FontStyle != "DEFAULT" && FontStyle != "LIGHT" && FontStyle != "LARGE" && FontStyle != "COMPACT")
@@ -396,6 +438,22 @@ class DialogueMenuConfig
 			Font = DialogueMenuFont.DEFAULT;
 			TextSize = DialogueMenuTextSize.NORMAL;
 			ApplyLegacyFontStyle();
+		}
+
+		if (ConfigVersion < 13)
+		{
+			//! The framing the portrait shipped with in 1.9.0 cut the top of
+			//! the head off, so an upgrade takes the corrected one rather
+			//! than keeping a look nobody chose.
+			PortraitZoom = PORTRAIT_ZOOM_DEFAULT;
+			PortraitOffsetY = PORTRAIT_OFFSET_DEFAULT;
+		}
+
+		if (ConfigVersion < 12)
+		{
+			//! Off, so upgrading does not rearrange a window the owner was
+			//! happy with.
+			ShowSpeakerPortrait = false;
 		}
 
 		ConfigVersion = CURRENT_VERSION;
@@ -536,6 +594,9 @@ class DialogueMenuConfig
 		rpc.Write(ShowErrorNotifications);
 		rpc.Write(ScrollSpeed);
 		rpc.Write(ShowReputationNotifications);
+		rpc.Write(ShowSpeakerPortrait);
+		rpc.Write(PortraitZoom);
+		rpc.Write(PortraitOffsetY);
 		rpc.Write(BookTabName);
 		rpc.Write(BookPageTitle);
 		rpc.Write(BookColumnName);
@@ -578,6 +639,9 @@ class DialogueMenuConfig
 		if (!ctx.Read(ShowErrorNotifications)) return false;
 		if (!ctx.Read(ScrollSpeed)) return false;
 		if (!ctx.Read(ShowReputationNotifications)) return false;
+		if (!ctx.Read(ShowSpeakerPortrait)) return false;
+		if (!ctx.Read(PortraitZoom)) return false;
+		if (!ctx.Read(PortraitOffsetY)) return false;
 		if (!ctx.Read(BookTabName)) return false;
 		if (!ctx.Read(BookPageTitle)) return false;
 		if (!ctx.Read(BookColumnName)) return false;

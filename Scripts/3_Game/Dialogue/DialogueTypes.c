@@ -874,6 +874,21 @@ class DialogueTree
 	//! patrol, so a name here is a name per character, not per patrol.
 	string SpeakerName = "";
 
+	//! Artwork to show in place of the live portrait, as a path inside a PBO
+	//! -- "MyServerArt/GUI/portraits/anna.paa", written with forward slashes
+	//! the way the mod loads its own images, since a backslash in a JSON
+	//! string has to be doubled to survive. Left empty, the window renders
+	//! the character themselves and no art is needed.
+	//!
+	//! Deliberately an arbitrary path rather than a name from a list of ours:
+	//! the art lives in the owner's own addon, built and shipped by them, so
+	//! the mod never has to carry anyone's portraits. Ours is not involved
+	//! beyond loading what this names.
+	//!
+	//! Nothing is validated here -- a path that does not resolve draws
+	//! nothing, and DialogueForge warns before the game ever sees it.
+	string PortraitImage = "";
+
 	string ReputationVar = "";
 
 	//! The most this character's reputation is meant to reach. Only used for
@@ -1125,6 +1140,7 @@ class DialogueTree
 		DialogueRepTierList.Write(rpc, ReputationTiers);
 		rpc.Write(LocKey);
 		rpc.Write(SpeakerName);
+		rpc.Write(PortraitImage);
 	}
 
 	bool OnRecieve(ParamsReadContext ctx)
@@ -1332,6 +1348,7 @@ class DialogueTree
 		if (!DialogueRepTierList.Read(ctx, ReputationTiers)) return false;
 		if (!ctx.Read(LocKey)) return false;
 		if (!ctx.Read(SpeakerName)) return false;
+		if (!ctx.Read(PortraitImage)) return false;
 
 		return true;
 	}

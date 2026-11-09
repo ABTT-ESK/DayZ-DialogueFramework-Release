@@ -55,6 +55,9 @@ dialogue trees.
   "ShowLanguageButton": true,
   "ScaleTextWithPanel": false,
   "ShowErrorNotifications": true,
+  "ShowSpeakerPortrait": false,
+  "PortraitZoom": 1.0,
+  "PortraitOffsetY": -0.25,
   "ScrollSpeed": 1.0,
   "ShowReputationNotifications": true,
   "BookTabName": "",
@@ -334,6 +337,29 @@ change it, and it is what they get back if they pick *Reset to the server's
 settings*.
 
 ## Telling players who a choice pleased or annoyed
+
+`"ShowSpeakerPortrait": true` draws the speaker in the top-left of the window
+and moves their name and spoken line over to sit beside it. It is **off by
+default**, so updating rearranges nothing.
+
+No artwork is needed: it renders the character themselves, in whatever loadout
+your server gave them. A conversation can name your own picture instead with
+`PortraitImage` — see DIALOGUE_TREE_GUIDE.md, which also covers overriding the
+choice from your own addon. Players can force portraits on or off for
+themselves in the window's Settings screen.
+
+Two settings decide how they are framed in it. `"PortraitZoom"` is how close
+they are drawn — about **0.7** fits a whole body in, **1.0** is head and chest,
+**2.0** and up is a face. It will not go outside 0.62 to 3.0, which is the
+range DayZ's own character preview works in.
+
+`"PortraitOffsetY"` is which part of them the frame is looking at, from -1.0 to
+1.0. **Lower** values look further **up** the body: around -0.75 centres on the
+face, 0 sits on the chest, and +0.6 brings the boots into view. If heads are
+coming out cropped, lower this before touching the zoom.
+
+Both are ignored for a conversation that names its own picture with
+`PortraitImage` — a flat image is simply stretched to the frame.
 
 `"ShowReputationNotifications": true` (the default) puts a short pop-up on
 screen when a choice a player made moves someone's standing — the character's
